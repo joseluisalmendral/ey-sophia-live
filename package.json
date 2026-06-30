@@ -9,17 +9,32 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.19.5",
+    "@number-flow/react": "^0.6.1",
+    "@paper-design/shaders-react": "^0.0.76",
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.2",
+    "@tsparticles/fireworks": "^4.3.0",
+    "@tsparticles/react": "^4.3.0",
+    "canvas-confetti": "^1.9.4",
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
+    "motion": "^12.42.0",
     "next": "16.2.9",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-rewards": "^2.1.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "sharp": "^0.35.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -1,26 +1,124 @@
 @import "tailwindcss";
 
+/*
+ * EY SophIA Live Voting — design tokens (Tailwind v4 CSS-first).
+ *
+ * Everything declared in `@theme` becomes a Tailwind utility, e.g.
+ *   --color-ey-yellow  -> bg-ey-yellow / text-ey-yellow / border-ey-yellow
+ *   --font-display     -> font-display
+ *
+ * Projector-first dark base. EY Yellow (#FFE600) is the SINGLE highlight,
+ * reserved for the leader/winner. thePower green is a sparing co-brand accent,
+ * NEVER placed adjacent to the yellow beam.
+ */
+@theme {
+  /* --- EY core palette (verified vs EY Brand Guidelines, NEVER altered) --- */
+  --color-ey-yellow: #ffe600; /* the beam + single highlight */
+  --color-ey-offblack: #2e2e38; /* logo letters on light surfaces */
+  --color-ey-confident: #1a1a24; /* "Confident Black" — deep digital base */
+  --color-ey-offwhite: #f6f6fa;
+  --color-ey-gray1: #747480;
+  --color-ey-gray2: #c4c4cd;
+
+  /* --- Cosmic (SophIA event extension; NOT official EY) --- */
+  --color-cosmic-deep: #0b1026; /* radial gradient outer */
+  --color-cosmic-mid: #141a33; /* radial gradient inner */
+  --color-cosmic-700: #1e2647; /* raised cosmic surface */
+
+  /* --- thePower co-brand accent --- */
+  /* Sampled from public/brand/thepower-logo.webp (dominant green band). */
+  /* Fallback if sampling unavailable: #00C389. Used sparingly; never beside the yellow beam. */
+  --color-power-green: #96d3b4;
+
+  /* --- Semantic surfaces / text --- */
+  --color-surface: var(--color-ey-confident); /* projector base */
+  --color-surface-raised: #20202c; /* mobile cards / elevated panels */
+  --color-text: var(--color-ey-offwhite);
+  --color-text-dim: var(--color-ey-gray2);
+  --color-focus: #7db8ff; /* focus-visible ring, AA on dark */
+  --color-positive: var(--color-power-green);
+
+  /* --- Fonts (exposed by next/font in layout.tsx) --- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-overpass), var(--font-inter), ui-sans-serif, sans-serif;
+
+  /* --- Type scale (rem) --- */
+  --text-display-2xl: 5.5rem;
+  --text-display-xl: 4rem;
+  --text-display: 3rem;
+  --text-h1: 2.25rem;
+  --text-h2: 1.75rem;
+  --text-h3: 1.375rem;
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-micro: 0.75rem;
+
+  /* --- Radius scale --- */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  /* --- Elevation (tinted on cosmic, not pure black) --- */
+  --shadow-e1: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-e2: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-glow-win: 0 0 48px rgba(255, 230, 0, 0.35);
+
+  /* --- Motion tokens --- */
+  --duration-micro: 120ms;
+  --duration-fast: 200ms;
+  --duration-base: 320ms;
+  --duration-slow: 600ms;
+  --duration-suspense: 2400ms;
+  --duration-fireworks: 4000ms;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decel: cubic-bezier(0, 0, 0, 1);
+  --ease-accel: cubic-bezier(0.3, 0, 1, 1);
+}
+
+/*
+ * Projector-first base. Radial cosmic gradient so EY Yellow pops and confetti
+ * reads. Solid fallback color underneath in case the gradient is unsupported.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100dvh;
+  background-color: var(--color-cosmic-deep);
+  background-image: radial-gradient(
+    ellipse 120% 90% at 50% 0%,
+    var(--color-cosmic-mid) 0%,
+    var(--color-cosmic-deep) 60%
+  );
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Tabular numerals everywhere counters/percentages render (prevents layout shift). */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible, AA-compliant focus ring for keyboard users on the dark base. */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Reduced motion: collapse large motion to instant/crossfade globally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,6 +1,9 @@
 allowBuilds:
+  '@tsparticles/engine': set this to true or false
   sharp: set this to true or false
   unrs-resolver: set this to true or false
-ignoredBuiltDependencies:
+onlyBuiltDependencies:
+  - "@tsparticles/engine"
   - sharp
   - unrs-resolver
+verifyDepsBeforeRun: false
