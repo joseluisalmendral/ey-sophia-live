@@ -58,6 +58,7 @@
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
+  --radius-pill: 9999px;
 
   /* --- Elevation (tinted on cosmic, not pure black) --- */
   --shadow-e1: 0 2px 8px rgba(0, 0, 0, 0.4);
