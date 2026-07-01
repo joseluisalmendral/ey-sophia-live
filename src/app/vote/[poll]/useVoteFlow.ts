@@ -1,21 +1,27 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { useLiveTally } from "@/lib/realtime/useLiveTally";
-import { usePollWatch } from "@/lib/realtime/usePollWatch";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePollStatus } from "@/lib/polling/usePollStatus";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { Poll, PollStatus, Team } from "@/lib/types";
 
 /**
  * useVoteFlow — the container/logic side of the voter experience.
  *
- * Owns the live tally, the derived poll status, the session action state, the
- * submit→confirm flow (fetch + confetti + haptics), the reduced-motion pref, and
- * the derived DISPLAYED phase. VoteClient consumes the return value and stays a
- * thin presentational switch over `phase`.
+ * Owns the derived poll status (via HTTP polling, NOT realtime), the session
+ * action state, the submit→confirm flow (fetch + confetti + haptics), the
+ * reduced-motion pref, and the derived DISPLAYED phase. VoteClient consumes the
+ * return value and stays a thin presentational switch over `phase`.
  *
- * Realtime status flips (open<->closed) transition the UI WITHOUT a reload
- * because the phase is derived purely from (live status + action) during render.
+ * NO WEBSOCKET on the voter path. Voters never open a Supabase realtime channel
+ * — that would count against the 200 concurrent-connection cap and not scale to
+ * a large room. Instead `usePollStatus` polls a CDN-cached status endpoint on a
+ * slow, jittered, visibility-aware cadence, so the whole room collapses to a few
+ * origin hits/sec. The projector (/screen) keeps realtime unchanged.
+ *
+ * Status flips (draft/countdown → open → closed) transition the UI WITHOUT a
+ * reload because the phase is derived purely from (polled status + action)
+ * during render.
  */
 
 type VoteResult =
@@ -36,8 +42,8 @@ export type Phase =
 
 /**
  * What the voter has actually done this session. The DISPLAYED phase is derived
- * purely from (live status + this action) during render — so realtime status
- * flips transition the UI with no setState-in-effect and no reload.
+ * purely from (polled status + this action) during render — so status flips
+ * transition the UI with no setState-in-effect and no reload.
  */
 export type Action =
   | "idle"
@@ -75,6 +81,15 @@ export function derivePhase(status: PollStatus, action: Action): Phase {
   }
 }
 
+/** Row shape returned by /api/poll/[id]/results (mirrors the get_results RPC). */
+interface ResultsRow {
+  team_id: string;
+  name: string;
+  color: string;
+  team_position: number;
+  count: number;
+}
+
 export interface VoteFlow {
   status: PollStatus;
   phase: Phase;
@@ -107,22 +122,15 @@ export function useVoteFlow(
     alreadyVotedOnReload ? "already" : "idle",
   );
 
-  // FREE-TIER CONNECTION MITIGATION: hold the realtime WS subscription ONLY
-  // while the voter still needs the live tally — i.e. before they have cast a
-  // vote. Once they have acted ('voted' or 'already'/reload marker) they just
-  // watch the big screen, so we DROP the WS connection and switch to a
-  // lightweight status poll (usePollWatch). This keeps sustained realtime
-  // connections at ≈ (voters still deciding) + screen, instead of one per open
-  // tab for the whole event. The reveal still works: usePollWatch fetches the
-  // final ranked results once the poll closes.
+  // A voter who has acted (voted or already/reload marker) no longer needs the
+  // fast "open flip" cadence — they only await close. usePollStatus slows to the
+  // AFTER-vote cadence and keeps polling until the poll is closed.
   const hasActed = action === "voted" || action === "already";
-  const live = useLiveTally(poll.id, { enabled: !hasActed });
-  const watch = usePollWatch(poll.id, hasActed);
+  const poller = usePollStatus(poll.id, { hasActed });
 
-  // Live status wins once realtime is up; after voting the poll-watch status
-  // takes over; fall back to the server snapshot before either resolves.
-  const status: PollStatus =
-    (hasActed ? watch.status : live.status) ?? poll.status;
+  // Polled status wins once it resolves; fall back to the server snapshot before
+  // the first successful poll.
+  const status: PollStatus = poller.status ?? poll.status;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // votedTeamId is set ONLY on a fresh 'ok' vote — never on 'already'/reload,
@@ -130,7 +138,12 @@ export function useVoteFlow(
   const [votedTeamId, setVotedTeamId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Displayed phase is derived from live status + the voter's action.
+  // Final ranked results, fetched EXACTLY ONCE when the poll closes and the
+  // voter has a known team (fresh 'ok' vote). Drives the personal "#N" reveal.
+  const [rankedResults, setRankedResults] = useState<ResultsRow[]>([]);
+  const resultsFetched = useRef(false);
+
+  // Displayed phase is derived from polled status + the voter's action.
   const phase = derivePhase(status, action);
 
   const votedTeam = useMemo(
@@ -198,20 +211,56 @@ export function useVoteFlow(
     }
   }, [selectedId, poll.id, reduced]);
 
-  // Resolve the personal rank at reveal (fresh 'ok' only). Before voting the
-  // rank would come from the live tally; after voting it comes from the
-  // poll-watch's one-shot get_results at close. Since the personal reveal only
-  // renders for a fresh vote (which always sets hasActed), watch is the source.
-  const myRank = useMemo(() => {
-    if (!votedTeamId) return null;
-    const source = hasActed ? watch.teams : live.teams;
-    return source.find((t) => t.id === votedTeamId)?.rank ?? null;
-  }, [hasActed, watch.teams, live.teams, votedTeamId]);
+  // Personal reveal: when the poll closes AND the voter cast a known vote, fetch
+  // the ranked results ONCE from the cached endpoint. Any failure degrades to
+  // the neutral "watch the big screen" reveal (rank stays null) — never an error.
+  useEffect(() => {
+    if (status !== "closed" || !votedTeamId || resultsFetched.current) return;
+    resultsFetched.current = true;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/poll/${encodeURIComponent(poll.id)}/results`,
+          { cache: "no-store" },
+        );
+        if (!active || !res.ok) return;
+        const data = (await res.json()) as { teams?: ResultsRow[] };
+        if (active && Array.isArray(data.teams)) {
+          setRankedResults(data.teams);
+        }
+      } catch {
+        // Silent: reveal falls back to the neutral state.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [status, votedTeamId, poll.id]);
 
-  // Total finalists is stable from the server props; fall back to whichever
-  // realtime source has teams (keeps the "de N finalistas" copy correct).
-  const totalTeams =
-    teams.length || (hasActed ? watch.teams.length : live.teams.length);
+  // Personal rank from the one-shot results fetch (dense 1-based ranking, ties
+  // share a rank — matches the projector's ranking). Only a fresh vote reaches
+  // the reveal phase, so votedTeamId is always known when this matters.
+  const myRank = useMemo(() => {
+    if (!votedTeamId || rankedResults.length === 0) return null;
+    const sorted = [...rankedResults].sort(
+      (a, b) => b.count - a.count || a.team_position - b.team_position,
+    );
+    let lastCount = Number.POSITIVE_INFINITY;
+    let lastRank = 0;
+    for (let i = 0; i < sorted.length; i++) {
+      const row = sorted[i];
+      const rank = row.count === lastCount ? lastRank : i + 1;
+      lastCount = row.count;
+      lastRank = rank;
+      if (row.team_id === votedTeamId) return rank;
+    }
+    return null;
+  }, [rankedResults, votedTeamId]);
+
+  // Total finalists is stable from the server props; fall back to the fetched
+  // results length (keeps the "de N finalistas" copy correct).
+  const totalTeams = teams.length || rankedResults.length;
 
   return {
     status,
@@ -224,7 +273,7 @@ export function useVoteFlow(
     error,
     submit,
     submitting: action === "submitting",
-    closesAt: (hasActed ? watch.closesAt : live.closesAt) ?? poll.closesAt,
+    closesAt: poller.closesAt ?? poll.closesAt,
     totalTeams,
   };
 }
