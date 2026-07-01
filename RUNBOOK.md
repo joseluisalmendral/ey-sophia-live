@@ -2,7 +2,27 @@
 
 Guía del operador para las **pruebas manuales** y para **gestionar el día del evento**.
 Escrita para seguirse de arriba abajo. Si solo vas a leer una sección, lee
-**«Cómo está configurada la cuenta»** y **«Comprobaciones previas del día del evento»**.
+**«Qué se abre en cada dispositivo»**, **«Cómo está configurada la cuenta»** y
+**«Comprobaciones previas del día del evento»**.
+
+---
+
+## 📍 Qué se abre en cada dispositivo (léelo primero)
+
+Cada superficie va en un dispositivo distinto. **El proyector y el control del admin van
+en equipos SEPARADOS**: la sala ve la proyección limpia y el presentador controla desde su
+propio dispositivo.
+
+| Superficie | URL | ¿Dónde se abre? | Quién la usa |
+|---|---|---|---|
+| **Votación** | `/vote/[código]` | **MÓVIL** de cada asistente | Los asistentes — entran **escaneando el QR** de la pantalla (o metiendo el código en la home `/`). |
+| **Pantalla / Proyección** | `/screen/[código]` | **ORDENADOR/PORTÁTIL conectado al PROYECTOR** (la pantalla grande de la sala), a pantalla completa | La ve toda la sala. Muestra el QR + las gráficas en vivo + la revelación del ganador. |
+| **Panel de administración** | `/admin` | **ORDENADOR o MÓVIL del PRESENTADOR** — un dispositivo **APARTE**, nunca el proyectado | Solo el presentador/admin. Configura equipos, abre/cierra la votación, ve analytics. |
+| **Home / acceso por código** | `/` | Cualquiera (móvil u ordenador) | Entrada por **código** como *fallback* si el QR falla; incluye un enlace discreto al panel de admin. |
+
+> **Setup típico del día:** un **portátil conectado al proyector** abre `/screen/[código]` a
+> pantalla completa, y el **presentador** controla desde **su móvil o un segundo portátil** en
+> `/admin`. Los asistentes solo usan su **móvil** (vía QR). Nunca proyectes la ruta `/admin`.
 
 ---
 
