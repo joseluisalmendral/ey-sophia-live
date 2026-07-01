@@ -13,17 +13,21 @@ import type { PollStatus } from "@/lib/types";
  * is `public, s-maxage=3`, the whole room collapses to a few origin hits/sec.
  *
  * Cadence + abuse-safety (all deliberate so the polling reads as normal traffic,
- * never an attack):
- *  - Base interval 12s BEFORE voting, 20s AFTER voting (post-vote users only need
- *    to learn when the poll closes — they watch the big screen for the race).
- *    Deliberately slow: a full room behind ONE venue NAT IP then produces only
- *    ~20 req/s, far below Vercel's DDoS-mitigation threshold, so the room is never
- *    served a 403 (x-vercel-mitigated). The screen keeps realtime for the race.
+ * never an attack). The cadence is STATUS-AWARE so open-detection is fast without
+ * ever approaching Vercel's DDoS threshold (all responses are CDN-cached, so a
+ * whole room collapses to ~1 origin hit / s-maxage window regardless):
+ *  - WAITING (status draft/countdown, not yet voted): ~4s — the voter is staring
+ *    at the lobby waiting for the flip, so detect `open` within a few seconds. A
+ *    full room behind ONE venue NAT IP then produces well under ~25 req/s (verified
+ *    safe; the ~700 req/s trip point is far away), and responses are cache hits.
+ *  - OPEN, not yet voted: ~8s — the vote cards are up; they only need the close
+ *    flip now, so back off.
+ *  - AFTER voting: ~20s — they only await close/reveal and watch the big screen.
  *  - A random initial delay (0..base) spreads the first poll so a room that loads
  *    together does not fire one synchronized same-IP burst.
  *  - ±30% random jitter per tick so phones that loaded together do not sync into
  *    a thundering herd hitting the origin on the same second.
- *  - A hard floor: never schedule a request sooner than MIN_INTERVAL_MS (10s).
+ *  - A hard floor: never schedule a request sooner than MIN_INTERVAL_MS (3s).
  *  - Exponential backoff on fetch error (capped), so a flaky network backs off
  *    instead of hammering.
  *  - AbortController + an in-flight guard: requests never overlap.
@@ -37,12 +41,19 @@ import type { PollStatus } from "@/lib/types";
  * message; it never shows a spinner-of-death or an error toast.
  */
 
-/** Base cadence before the voter has acted (they still need the open flip). */
-const BASE_INTERVAL_BEFORE_MS = 12000;
-/** Slower cadence after voting: they only await close/reveal. */
+/**
+ * Cadence while WAITING for the open flip (status draft/countdown, not voted).
+ * Fast so the lobby → cards transition lands within a few seconds when there is
+ * no count-in. With a count-in the client flips locally at opens_at (instant),
+ * so this is only the fallback/correction path.
+ */
+const BASE_INTERVAL_WAITING_MS = 4000;
+/** Cadence once OPEN but not yet voted: back off, only the close flip remains. */
+const BASE_INTERVAL_OPEN_MS = 8000;
+/** Slowest cadence after voting: they only await close/reveal. */
 const BASE_INTERVAL_AFTER_MS = 20000;
 /** Hard floor — a scheduled tick is never sooner than this, jitter included. */
-const MIN_INTERVAL_MS = 10000;
+const MIN_INTERVAL_MS = 3000;
 /** ±30% jitter to desync the room. */
 const JITTER_RATIO = 0.3;
 /** Backoff cap on repeated fetch errors. */
@@ -58,8 +69,8 @@ interface StatusResponse {
 
 export interface UsePollStatusOptions {
   /**
-   * Switches the base cadence from BEFORE (4s) to AFTER (8s). Pass true once the
-   * voter has acted (voted or already-voted): post-action they only await close.
+   * Pass true once the voter has acted (voted or already-voted): post-action they
+   * only await close/reveal, so the cadence drops to the slowest AFTER interval.
    */
   hasActed?: boolean;
   /**
@@ -73,6 +84,8 @@ export interface UsePollStatusOptions {
 export interface UsePollStatusResult {
   /** Last known status, or null until the first successful read. */
   status: PollStatus | null;
+  /** Last known open timestamp (server-authoritative), or null. Drives the local opens_at flip. */
+  opensAt: string | null;
   /** Last known close timestamp (server-authoritative), or null. */
   closesAt: string | null;
   /** True once the first read (success) has resolved. */
@@ -95,6 +108,7 @@ export function usePollStatus(
   const stopWhenClosed = options?.stopWhenClosed ?? true;
 
   const [status, setStatus] = useState<PollStatus | null>(null);
+  const [opensAt, setOpensAt] = useState<string | null>(null);
   const [closesAt, setClosesAt] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -143,9 +157,16 @@ export function usePollStatus(
         );
         return jittered(backoff);
       }
-      const base = hasActedRef.current
-        ? BASE_INTERVAL_AFTER_MS
-        : BASE_INTERVAL_BEFORE_MS;
+      // Status-aware cadence: fast while waiting for the open flip, back off once
+      // open (only the close flip remains), slowest after the voter has acted.
+      let base: number;
+      if (hasActedRef.current) {
+        base = BASE_INTERVAL_AFTER_MS;
+      } else if (statusRef.current === "open") {
+        base = BASE_INTERVAL_OPEN_MS;
+      } else {
+        base = BASE_INTERVAL_WAITING_MS;
+      }
       return jittered(base);
     };
 
@@ -174,6 +195,7 @@ export function usePollStatus(
         errorStreak = 0;
         statusRef.current = data.status;
         setStatus(data.status);
+        setOpensAt(data.opensAt);
         setClosesAt(data.closesAt);
         setReady(true);
       } catch {
@@ -199,7 +221,7 @@ export function usePollStatus(
     // IP (Vercel's DDoS mitigation would read a big same-IP spike as an attack).
     // The SSR snapshot already renders the correct initial state, so delaying the
     // first client poll costs no UX.
-    schedule(Math.random() * BASE_INTERVAL_BEFORE_MS);
+    schedule(Math.random() * BASE_INTERVAL_WAITING_MS);
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", onVisibility);
     }
@@ -214,5 +236,5 @@ export function usePollStatus(
     };
   }, [pollId]);
 
-  return { status, closesAt, ready };
+  return { status, opensAt, closesAt, ready };
 }

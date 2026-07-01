@@ -3,7 +3,7 @@
 import { memo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { QrCode } from "@/components/atoms/QrCode";
-import { CodeBadge } from "@/components/atoms/CodeBadge";
+import { CountInTimer } from "@/components/atoms/CountInTimer";
 import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { EyBeam } from "@/components/brand/EyBeam";
@@ -14,13 +14,16 @@ import type { Poll, RankedTeam, Team } from "@/lib/types";
 /**
  * LobbyStage — the cinematic pre-voting screen (status draft/countdown).
  *
- * LEFT: a GIANT QR (encodes the VOTER url, never the screen url) + the join code
- * + a live joined-count via Realtime presence (degrades to an inviting "scan to
- * join" prompt) + an animated pulse prompt.
+ * LEFT: a GIANT QR (encodes the VOTER url, never the screen url) as the clear
+ * hero + a live joined-count via Realtime presence (degrades to an inviting
+ * "scan to join" prompt). The join code is DEMOTED to a small, clearly-labelled
+ * fallback line under the QR ("¿No puedes escanear? …") so it reads as the backup
+ * path, never a competing step.
  * RIGHT: finalist cards teased at ZERO — anticipation, never a dead "no data".
  *
- * For `countdown`, a dramatic count-in line is shown derived from the poll's
- * `opensAt` (if available) — otherwise an evocative "preparados" pulse.
+ * For `countdown` with a configured count-in, a BIG count-in to `opensAt` owns
+ * the top of the join column ("La votación abre en… MM:SS"); otherwise an
+ * evocative "preparados" pulse.
  */
 
 export interface LobbyStageProps {
@@ -30,7 +33,18 @@ export interface LobbyStageProps {
   liveTeams: RankedTeam[];
   voterUrl: string;
   isCountdown: boolean;
+  /** Server open timestamp (a FUTURE time during countdown) driving the count-in. */
+  opensAt: string | null;
   reduced: boolean;
+}
+
+/** Extract a friendly "dominio/" hint from the absolute voter URL (host only). */
+function domainHint(voterUrl: string): string {
+  try {
+    return new URL(voterUrl).host;
+  } catch {
+    return "";
+  }
 }
 
 export const LobbyStage = memo(function LobbyStage({
@@ -39,9 +53,14 @@ export const LobbyStage = memo(function LobbyStage({
   liveTeams,
   voterUrl,
   isCountdown,
+  opensAt,
   reduced,
 }: LobbyStageProps) {
   const joined = usePresenceCount(poll.id);
+  const domain = domainHint(voterUrl);
+  // A future opens_at drives the count-in; only show it during countdown.
+  const showCountIn =
+    isCountdown && opensAt !== null && new Date(opensAt).getTime() > Date.now();
   // Prefer live ranked teams (keeps order stable into the race); fall back to the
   // server snapshot so the right column is never blank before realtime is ready.
   const cards: Array<Pick<Team, "id" | "name" | "color">> =
@@ -51,6 +70,17 @@ export const LobbyStage = memo(function LobbyStage({
     <div className="grid h-full w-full grid-cols-[minmax(0,42%)_minmax(0,58%)] items-center gap-[clamp(1.5rem,4vw,4rem)] px-[clamp(1.5rem,4vw,4.5rem)] py-[clamp(1rem,3vh,2.5rem)]">
       {/* LEFT — join column */}
       <div className="flex flex-col items-center gap-[clamp(1rem,2.4vh,2rem)] text-center">
+        {/* Count-in owns the top of the column while the poll is counting in. */}
+        {showCountIn && (
+          <motion.div
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: durations.base, ease: easings.decel }}
+          >
+            <CountInTimer opensAt={opensAt} />
+          </motion.div>
+        )}
+
         <motion.div
           initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -59,7 +89,18 @@ export const LobbyStage = memo(function LobbyStage({
           <QrCode value={voterUrl} size={300} />
         </motion.div>
 
-        <CodeBadge code={poll.joinCode} caption="Código para votar" size="hero" />
+        {/* Join code DEMOTED to a small, clearly-labelled fallback line — the QR
+            is the hero; this is the backup path for phones that can't scan. */}
+        <p className="max-w-[24ch] text-[clamp(0.75rem,1.05vw,1rem)] leading-relaxed text-text-dim">
+          ¿No puedes escanear? Entra en{" "}
+          {domain && (
+            <span className="font-semibold text-text">{domain}/</span>
+          )}{" "}
+          e introduce el código{" "}
+          <span className="font-mono font-bold uppercase tracking-[0.15em] text-text">
+            {poll.joinCode}
+          </span>
+        </p>
 
         {/* Live joined count, or an inviting fallback prompt. */}
         <div className="flex min-h-[3rem] items-center justify-center">

@@ -81,6 +81,12 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
   );
   const [error, setError] = useState<string | null>(null);
 
+  // A poll needs at least 2 teams, each with a non-empty (trimmed) name, before
+  // it can be saved/created — otherwise the voter/projector would render broken.
+  const namedTeams = teams.filter((t) => t.name.trim().length > 0);
+  const teamsValid = namedTeams.length >= 2;
+  const canSave = Boolean(title.trim()) && teamsValid && !pending;
+
   function updateTeam(i: number, patch: Partial<TeamDraft>) {
     setTeams((prev) => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
   }
@@ -96,6 +102,14 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
 
   function submit() {
     setError(null);
+    if (!title.trim()) {
+      setError("Añade un título a la votación.");
+      return;
+    }
+    if (!teamsValid) {
+      setError("Añade al menos 2 equipos con nombre.");
+      return;
+    }
     const payload: PollFormInput = {
       id: initial.id,
       title,
@@ -222,6 +236,16 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
             </li>
           ))}
         </ul>
+
+        {/* Inline validation: a poll needs >= 2 named teams to be valid. */}
+        {!teamsValid && (
+          <p
+            role="status"
+            className="mt-3 text-small text-ey-yellow"
+          >
+            Añade al menos 2 equipos con nombre.
+          </p>
+        )}
       </div>
 
       {/* Timers */}
@@ -316,7 +340,10 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
         <button
           type="button"
           onClick={submit}
-          disabled={pending || !title.trim()}
+          disabled={!canSave}
+          title={
+            !teamsValid ? "Añade al menos 2 equipos con nombre" : undefined
+          }
           className="inline-flex h-11 items-center rounded-lg bg-ey-yellow px-6 font-display font-bold text-ey-confident transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {pending

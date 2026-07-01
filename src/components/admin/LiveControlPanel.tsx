@@ -52,12 +52,15 @@ export function LiveControlPanel({
   joinCode,
   initialStatus,
   hasCountdown,
+  teamCount,
   enabled = true,
 }: {
   pollId: string;
   joinCode: string;
   initialStatus: PollStatus;
   hasCountdown: boolean;
+  /** Number of saved teams with a non-empty name — a poll with <2 cannot open. */
+  teamCount: number;
   /**
    * When false, the panel stays mounted but does NOT open a realtime
    * subscription. PollWorkspace keeps the inactive tab mounted (to preserve
@@ -78,6 +81,13 @@ export function LiveControlPanel({
   // Prefer the realtime status once it arrives; fall back to the server snapshot.
   const status = liveStatus ?? initialStatus;
   const action = nextAction(status, hasCountdown);
+
+  // A poll with fewer than 2 named teams cannot be launched (the voter/projector
+  // would render broken). Block the transition that starts voting.
+  const teamsValid = teamCount >= 2;
+  const startsVoting =
+    action?.to === "open" || action?.to === "countdown";
+  const blockedForTeams = Boolean(startsVoting) && !teamsValid;
 
   function go(to: PollStatus) {
     setError(null);
@@ -132,7 +142,12 @@ export function LiveControlPanel({
 
         {/* Next action — the one obvious button under pressure */}
         <div className="mt-5">
-          {action ? (
+          {blockedForTeams ? (
+            <div className="rounded-lg border border-ey-yellow/30 bg-ey-yellow/5 px-4 py-3 text-small text-ey-yellow">
+              Añade al menos 2 equipos con nombre en la pestaña
+              «Configuración» antes de abrir la votación.
+            </div>
+          ) : action ? (
             action.danger ? (
               confirmClose ? (
                 <div className="flex items-center gap-3 rounded-lg border border-[#FF6B6B]/40 bg-[#FF6B6B]/5 p-3">

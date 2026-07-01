@@ -46,8 +46,31 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
 
   // Live status wins once realtime is up; fall back to the server snapshot.
   const status: PollStatus = live.status ?? poll.status;
+  const opensAt = live.opensAt ?? poll.opensAt;
   const closesAt = live.closesAt ?? poll.closesAt;
   const showNames = poll.showLegend ? SHOW_NAMES_DEFAULT : false;
+
+  // Graceful guard: a misconfigured poll (no teams) must never render a broken
+  // race/donut/podium. Show a calm "in preparation" board instead. Uses the SSR
+  // teams as the authority (live.teams may be empty before the RPC resolves).
+  const hasTeams = teams.length > 0;
+  if (!hasTeams) {
+    return (
+      <ShaderBackground>
+        <main className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden px-8 text-center">
+          <div className="flex flex-col items-center gap-6">
+            <EyBeam surface="dark" size={64} label="" />
+            <h1 className="font-display text-[clamp(2rem,5vw,4rem)] font-black text-text">
+              {poll.title}
+            </h1>
+            <p className="max-w-[40ch] text-[clamp(1rem,2vw,1.5rem)] font-semibold text-text-dim">
+              Preparando la votación… todavía no hay equipos configurados.
+            </p>
+          </div>
+        </main>
+      </ShaderBackground>
+    );
+  }
 
   return (
     <ShaderBackground>
@@ -75,10 +98,10 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                   </span>
                 </div>
 
-                {/* Right side: race-time meta (live only). */}
+                {/* Right side: connection meta (live only). The close countdown
+                    lives prominently in the LiveStage join rail, not here. */}
                 {status === "open" && (
                   <div className="flex items-center gap-[clamp(0.75rem,2vw,1.5rem)]">
-                    {closesAt && <CountdownTimer closesAt={closesAt} size="chip" />}
                     <ConnectionDot state={live.connectionState} />
                   </div>
                 )}
@@ -97,6 +120,7 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                     liveTeams={live.teams}
                     voterUrl={voterUrl}
                     isCountdown={status === "countdown"}
+                    opensAt={opensAt}
                     reduced={reduced}
                   />
                 </StageWrap>
@@ -109,6 +133,7 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                     voterUrl={voterUrl}
                     liveTeams={live.teams}
                     showNames={showNames}
+                    closesAt={closesAt}
                     reduced={reduced}
                   />
                 </StageWrap>
@@ -166,12 +191,14 @@ const LiveStage = memo(function LiveStage({
   voterUrl,
   liveTeams,
   showNames,
+  closesAt,
   reduced,
 }: {
   poll: Poll;
   voterUrl: string;
   liveTeams: ReturnType<typeof useLiveTally>["teams"];
   showNames: boolean;
+  closesAt: string | null;
   reduced: boolean;
 }) {
   const isDivRace = poll.chartType === "bar_race";
@@ -182,6 +209,16 @@ const LiveStage = memo(function LiveStage({
       <div className="flex flex-col items-center gap-[clamp(0.6rem,1.6vh,1.2rem)]">
         <QrCode value={voterUrl} size={140} />
         <CodeBadge code={poll.joinCode} caption="Únete" size="inline" />
+        {/* Prominent close countdown when a duration was configured. Pulses < 10s
+            (handled inside CountdownTimer). Server-authoritative from closesAt. */}
+        {closesAt && (
+          <div className="mt-[clamp(0.4rem,1.5vh,1.4rem)] flex flex-col items-center gap-1">
+            <span className="font-display text-[clamp(0.6rem,0.9vw,0.9rem)] font-bold uppercase tracking-[0.22em] text-text-dim">
+              Cierra en
+            </span>
+            <CountdownTimer closesAt={closesAt} size="hero" />
+          </div>
+        )}
       </div>
 
       {/* Visualization */}

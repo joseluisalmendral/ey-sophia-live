@@ -75,6 +75,11 @@ export interface UseLiveTallyResult {
   /** Teams ordered by count desc (stable by team_position), ranked, with %. */
   teams: RankedTeam[];
   status: PollStatus | null;
+  /**
+   * Server timestamp the poll opens at, or null. During `countdown` this is a
+   * FUTURE timestamp, so the projector derives its pre-vote count-in from it.
+   */
+  opensAt: string | null;
   /** Server timestamp the poll auto-closes at, or null. Display derives the timer from this. */
   closesAt: string | null;
   connectionState: ConnectionState;
@@ -132,6 +137,7 @@ export function useLiveTally(
   const [metas, setMetas] = useState<Map<string, TeamMeta>>(new Map());
   const [counts, setCounts] = useState<Map<string, number>>(new Map());
   const [status, setStatus] = useState<PollStatus | null>(null);
+  const [opensAt, setOpensAt] = useState<string | null>(null);
   const [closesAt, setClosesAt] = useState<string | null>(null);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("connecting");
@@ -171,8 +177,10 @@ export function useLiveTally(
         scheduleFlush();
       } else if (evt.type === "status") {
         setStatus(evt.status);
-        // A poll opened AFTER this screen mounted carries closes_at here, so the
-        // countdown appears on the flip (the initial snapshot had none).
+        // A poll that changed status AFTER this screen mounted carries the fresh
+        // opens_at/closes_at here, so the count-in (countdown) and the close timer
+        // (open) appear on the flip even though the initial snapshot had none.
+        if (evt.opens_at !== undefined) setOpensAt(evt.opens_at ?? null);
         if (evt.closes_at !== undefined) setClosesAt(evt.closes_at ?? null);
       }
     },
@@ -304,6 +312,7 @@ export function useLiveTally(
   return {
     teams,
     status,
+    opensAt,
     closesAt,
     connectionState: enabled ? connectionState : "connecting",
     ready,

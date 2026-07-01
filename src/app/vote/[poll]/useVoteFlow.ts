@@ -22,6 +22,15 @@ import type { Poll, PollStatus, Team } from "@/lib/types";
  * Status flips (draft/countdown → open → closed) transition the UI WITHOUT a
  * reload because the phase is derived purely from (polled status + action)
  * during render.
+ *
+ * LOCAL opens_at FLIP: when the poll carries a server `opensAt` (a count-in was
+ * configured), we do NOT wait for the next poll to learn it opened — we compute
+ * the open moment CLIENT-SIDE from that server timestamp and flip the effective
+ * status to `open` exactly at `opensAt`. This makes the lobby → cards transition
+ * instant and perfectly synchronized with the projector's count-in. The same
+ * applies to `closesAt` (flip to `closed` locally at the deadline). Polling stays
+ * the authority/correction: the server timestamps are the source of truth and a
+ * later poll always reconciles the real status.
  */
 
 type VoteResult =
@@ -130,7 +139,16 @@ export function useVoteFlow(
 
   // Polled status wins once it resolves; fall back to the server snapshot before
   // the first successful poll.
-  const status: PollStatus = poller.status ?? poll.status;
+  const polledStatus: PollStatus = poller.status ?? poll.status;
+  const opensAt = poller.opensAt ?? poll.opensAt;
+  const closesAt = poller.closesAt ?? poll.closesAt;
+
+  // LOCAL FLIP: derive the EFFECTIVE status from the server timestamps so a
+  // configured count-in flips lobby → cards at opens_at with no wait for the next
+  // poll (instant + synchronized with the projector). We only ever advance the
+  // state machine forward (draft/countdown → open → closed); we never roll it
+  // back locally — a later poll remains the authority for corrections.
+  const status = useLocalStatusFlip(polledStatus, opensAt, closesAt);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // votedTeamId is set ONLY on a fresh 'ok' vote — never on 'already'/reload,
@@ -273,7 +291,108 @@ export function useVoteFlow(
     error,
     submit,
     submitting: action === "submitting",
-    closesAt: poller.closesAt ?? poll.closesAt,
+    closesAt,
     totalTeams,
   };
+}
+
+/**
+ * useLocalStatusFlip — derive the effective poll status from the polled status
+ * plus the server open/close timestamps, advancing LOCALLY (no extra network) at
+ * the exact instant each deadline passes.
+ *
+ * - If `opensAt` is in the future and the poll is still pre-open, schedule a
+ *   single timer that flips to `open` at that moment (a configured count-in then
+ *   opens instantly and in sync with the projector).
+ * - If `closesAt` has passed while `open`, flip to `closed` locally too.
+ *
+ * Only ever advances forward (pre-open → open → closed); a fresh poll status that
+ * is further along always wins. The server timestamps stay authoritative — this
+ * merely removes the poll-interval latency at the flip.
+ */
+function useLocalStatusFlip(
+  polledStatus: PollStatus,
+  opensAt: string | null,
+  closesAt: string | null,
+): PollStatus {
+  const [now, setNow] = useState(() => Date.now());
+
+  const opensAtMs = useMemo(
+    () => (opensAt ? new Date(opensAt).getTime() : null),
+    [opensAt],
+  );
+  const closesAtMs = useMemo(
+    () => (closesAt ? new Date(closesAt).getTime() : null),
+    [closesAt],
+  );
+
+  // Compute the effective status from the current clock + server timestamps.
+  const effective = deriveEffectiveStatus(
+    polledStatus,
+    opensAtMs,
+    closesAtMs,
+    now,
+  );
+
+  // Schedule a single timer to the NEXT boundary that would change the effective
+  // status, so we re-render exactly at opens_at / closes_at (not on an interval).
+  // The boundary condition recomputes the effective status inline (via the pure
+  // module-level helper) rather than depending on the `effective` value, so the
+  // dep array is honest AND exactly one timer is registered per boundary.
+  useEffect(() => {
+    const isOpenNow =
+      deriveEffectiveStatus(polledStatus, opensAtMs, closesAtMs, now) === "open";
+    const nextBoundary = (() => {
+      if (
+        opensAtMs !== null &&
+        opensAtMs > now &&
+        (polledStatus === "draft" || polledStatus === "countdown")
+      ) {
+        return opensAtMs;
+      }
+      if (closesAtMs !== null && closesAtMs > now && isOpenNow) {
+        return closesAtMs;
+      }
+      return null;
+    })();
+
+    if (nextBoundary === null) return;
+    const delay = Math.max(0, nextBoundary - Date.now());
+    const id = setTimeout(() => setNow(Date.now()), delay);
+    return () => clearTimeout(id);
+  }, [opensAtMs, closesAtMs, polledStatus, now]);
+
+  return effective;
+}
+
+/**
+ * Pure effective-status derivation. Advances the polled status forward when the
+ * server open/close deadlines have passed relative to `now`. Never rolls back.
+ */
+function deriveEffectiveStatus(
+  polledStatus: PollStatus,
+  opensAtMs: number | null,
+  closesAtMs: number | null,
+  now: number,
+): PollStatus {
+  if (polledStatus === "closed") return "closed";
+
+  // Close deadline reached while (effectively) open → closed.
+  if (closesAtMs !== null && now >= closesAtMs) {
+    // Only treat as closed if the poll had actually reached open (server said
+    // open, or open deadline passed). Guards against a stray future closes_at.
+    if (
+      polledStatus === "open" ||
+      (opensAtMs !== null && now >= opensAtMs)
+    ) {
+      return "closed";
+    }
+  }
+
+  if (polledStatus === "open") return "open";
+
+  // Pre-open (draft/countdown) with a reached open deadline → open.
+  if (opensAtMs !== null && now >= opensAtMs) return "open";
+
+  return polledStatus;
 }

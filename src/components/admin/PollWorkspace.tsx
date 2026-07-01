@@ -94,6 +94,9 @@ export function PollWorkspace({
           joinCode={joinCode}
           initialStatus={status}
           hasCountdown={hasCountdown}
+          teamCount={
+            configInitial.teams.filter((t) => t.name.trim().length > 0).length
+          }
           enabled={tab === "live"}
         />
       </div>
