@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "motion/react";
 import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
@@ -33,7 +34,7 @@ export interface PodiumProps {
 // Relative heights for the asymmetric plinths (vh-driven).
 const HEIGHTS = { first: 46, second: 34, third: 26 } as const;
 
-export function Podium({ outcome, reduced }: PodiumProps) {
+export const Podium = memo(function Podium({ outcome, reduced }: PodiumProps) {
   const [first, second, third] = outcome.podium;
   const winnerIds = new Set(outcome.winners.map((w) => w.id));
 
@@ -80,7 +81,7 @@ export function Podium({ outcome, reduced }: PodiumProps) {
       </div>
     </div>
   );
-}
+});
 
 function SharedCenter({
   first,
@@ -179,7 +180,7 @@ function PodiumBlock({
             style={{ fontSize: isWinner ? "clamp(2rem,4vw,4rem)" : "clamp(1.4rem,2.6vw,2.6rem)", color: fg }}
           >
             {place}
-            <span style={{ fontSize: "0.5em" }}>{place === 1 ? "º" : place === 2 ? "º" : "º"}</span>
+            <span style={{ fontSize: "0.5em" }}>º</span>
           </span>
           {/* Winner score SLAMS in */}
           <motion.span

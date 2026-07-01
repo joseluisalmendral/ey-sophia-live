@@ -72,10 +72,26 @@ export interface RankedTeam extends Team {
   percentage: number | null;
 }
 
-/** Realtime payloads broadcast on the private channel `poll:<id>`. */
+/**
+ * Realtime payloads broadcast on the private channel `poll:<id>`.
+ *
+ * WIRE SHAPE IS snake_case — these are emitted verbatim by the DB triggers via
+ * `realtime.send(payload jsonb, ...)` (see build/supabase, engram #926). The DB
+ * is the authoritative contract; the client normalizes these into camelCase
+ * domain state. Do NOT rename these fields to camelCase.
+ *  - `tally`  {type, poll_id, team_id, count}  — count is ABSOLUTE, latest wins.
+ *  - `status` {type, poll_id, status, closes_at, opens_at} — closes_at/opens_at
+ *    are stamped by set_poll_status on 'open'.
+ */
 export type RealtimeEvent =
-  | { type: "tally"; pollId: string; teamId: string; count: number }
-  | { type: "status"; pollId: string; status: PollStatus; closesAt?: string | null };
+  | { type: "tally"; poll_id: string; team_id: string; count: number }
+  | {
+      type: "status";
+      poll_id: string;
+      status: PollStatus;
+      closes_at?: string | null;
+      opens_at?: string | null;
+    };
 
 /** Connection state for the live tally hook; distinguishes "connecting" from a genuine zero. */
 export type ConnectionState = "connecting" | "live" | "reconnecting" | "closed";

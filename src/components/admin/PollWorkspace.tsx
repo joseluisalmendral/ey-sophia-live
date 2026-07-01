@@ -79,16 +79,24 @@ export function PollWorkspace({
         </Link>
       </div>
 
-      {tab === "config" ? (
+      {/*
+        Keep BOTH panels mounted and toggle visibility with `hidden`
+        (display:none) so switching tabs preserves unsaved config edits and does
+        NOT tear down LiveControlPanel's realtime subscription. Only the active
+        tab subscribes to realtime, via the `enabled` prop below.
+      */}
+      <div className={tab === "config" ? undefined : "hidden"}>
         <PollConfigForm initial={configInitial} />
-      ) : (
+      </div>
+      <div className={tab === "live" ? undefined : "hidden"}>
         <LiveControlPanel
           pollId={pollId}
           joinCode={joinCode}
           initialStatus={status}
           hasCountdown={hasCountdown}
+          enabled={tab === "live"}
         />
-      )}
+      </div>
     </div>
   );
 }

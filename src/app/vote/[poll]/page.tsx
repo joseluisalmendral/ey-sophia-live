@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Poll, PollStatus, Team } from "@/lib/types";
@@ -55,6 +57,25 @@ function mapPoll(r: PollRow): Poll {
   };
 }
 
+/** Per-poll <title> so a shared vote link reads as the specific poll. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ poll: string }>;
+}): Promise<Metadata> {
+  const { poll: pollParam } = await params;
+  const supabase = await createClient();
+  const column = UUID_RE.test(pollParam) ? "id" : "join_code";
+  const value = column === "join_code" ? pollParam.toUpperCase() : pollParam;
+  const { data } = await supabase
+    .from("polls")
+    .select("title")
+    .eq(column, value)
+    .maybeSingle<{ title: string }>();
+  const title = data?.title ? `Votar · ${data.title}` : "Votar · EY SophIA Live";
+  return { title };
+}
+
 export default async function VotePage({
   params,
 }: {
@@ -93,5 +114,18 @@ export default async function VotePage({
     color: t.color,
   }));
 
-  return <VoteClient poll={poll} teams={teams} />;
+  // Readable /vote-scoped marker set by /api/vote after a successful vote. If
+  // present, seed the client so a reload shows the neutral "Ya votaste" view
+  // (or the neutral closed view when the poll is closed) instead of the cards.
+  // Neutral only: this marker carries NO team, so we never claim a specific vote.
+  const cookieStore = await cookies();
+  const alreadyVotedOnReload = cookieStore.get(`voted_${poll.id}`)?.value === "1";
+
+  return (
+    <VoteClient
+      poll={poll}
+      teams={teams}
+      alreadyVotedOnReload={alreadyVotedOnReload}
+    />
+  );
 }

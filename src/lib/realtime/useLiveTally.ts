@@ -61,6 +61,16 @@ const RECONNECT_MAX_MS = 8000;
 // Percentages stay hidden until the room is meaningful (no "67%" at 3 votes).
 const MEANINGFUL_TOTAL = 10;
 
+export interface UseLiveTallyOptions {
+  /**
+   * When false, the hook performs NO network work (no get_results read, no WS
+   * subscription) and returns idle defaults. Lets a caller pause the whole
+   * realtime lifecycle (e.g. an inactive admin tab) without unmounting.
+   * Defaults to true.
+   */
+  enabled?: boolean;
+}
+
 export interface UseLiveTallyResult {
   /** Teams ordered by count desc (stable by team_position), ranked, with %. */
   teams: RankedTeam[];
@@ -112,7 +122,11 @@ function rankAndOrder(
   });
 }
 
-export function useLiveTally(pollId: string): UseLiveTallyResult {
+export function useLiveTally(
+  pollId: string,
+  options?: UseLiveTallyOptions,
+): UseLiveTallyResult {
+  const enabled = options?.enabled ?? true;
   const supabase = useMemo(() => createClient(), []);
 
   const [metas, setMetas] = useState<Map<string, TeamMeta>>(new Map());
@@ -150,20 +164,33 @@ export function useLiveTally(pollId: string): UseLiveTallyResult {
 
   const handleEvent = useCallback(
     (evt: RealtimeEvent) => {
+      // Wire shape is snake_case (DB triggers emit it verbatim — engram #926).
       if (evt.type === "tally") {
         // Absolute value — latest wins; batched to the flush cadence.
-        pendingCounts.current.set(evt.teamId, evt.count);
+        pendingCounts.current.set(evt.team_id, evt.count);
         scheduleFlush();
       } else if (evt.type === "status") {
         setStatus(evt.status);
-        if (evt.closesAt !== undefined) setClosesAt(evt.closesAt ?? null);
+        // A poll opened AFTER this screen mounted carries closes_at here, so the
+        // countdown appears on the flip (the initial snapshot had none).
+        if (evt.closes_at !== undefined) setClosesAt(evt.closes_at ?? null);
       }
     },
     [scheduleFlush],
   );
 
+  // useLatest: keep the newest handler in a ref so the subscribe effect below can
+  // stay decoupled from render identity (deps = [pollId, supabase, enabled] only).
+  // The ref is written in an effect (never during render) to satisfy the React
+  // Compiler's refs rule; the WS callbacks read `.current` at fire time.
+  const handleEventRef = useRef(handleEvent);
+  useEffect(() => {
+    handleEventRef.current = handleEvent;
+  }, [handleEvent]);
+
   // Initial read (runs once per pollId): seed metadata + absolute counts.
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase.rpc("get_results", {
@@ -192,10 +219,14 @@ export function useLiveTally(pollId: string): UseLiveTallyResult {
     return () => {
       cancelled = true;
     };
-  }, [pollId, supabase]);
+  }, [pollId, supabase, enabled]);
 
   // Subscribe to the private channel, with jittered reconnect on drop.
+  // Deps are ONLY [pollId, supabase, enabled] — the event handler is read from a
+  // ref, so the WS channel lifecycle is decoupled from render identity and never
+  // tears down/re-subscribes on an unrelated re-render.
   useEffect(() => {
+    if (!enabled) return;
     mounted.current = true;
 
     const connect = async () => {
@@ -214,10 +245,10 @@ export function useLiveTally(pollId: string): UseLiveTallyResult {
 
       channel
         .on("broadcast", { event: "tally" }, ({ payload }) =>
-          handleEvent(payload as RealtimeEvent),
+          handleEventRef.current(payload as RealtimeEvent),
         )
         .on("broadcast", { event: "status" }, ({ payload }) =>
-          handleEvent(payload as RealtimeEvent),
+          handleEventRef.current(payload as RealtimeEvent),
         )
         .subscribe((subStatus) => {
           if (!mounted.current) return;
@@ -264,9 +295,17 @@ export function useLiveTally(pollId: string): UseLiveTallyResult {
         channelRef.current = null;
       }
     };
-  }, [pollId, supabase, handleEvent]);
+  }, [pollId, supabase, enabled]);
 
   const teams = useMemo(() => rankAndOrder(metas, counts), [metas, counts]);
 
-  return { teams, status, closesAt, connectionState, ready };
+  // When paused, report the idle "connecting" state (derived, not stored) so a
+  // stale "live"/"reconnecting" never leaks after the caller flips enabled off.
+  return {
+    teams,
+    status,
+    closesAt,
+    connectionState: enabled ? connectionState : "connecting",
+    ready,
+  };
 }

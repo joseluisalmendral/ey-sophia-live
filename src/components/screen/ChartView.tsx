@@ -1,10 +1,30 @@
 "use client";
 
-import { useMemo } from "react";
-import ReactECharts from "echarts-for-react";
+import { memo, useMemo } from "react";
+import dynamic from "next/dynamic";
 import type { EChartsOption } from "echarts";
 import { pickTextOn } from "@/lib/utils/contrast";
 import type { ChartType, RankedTeam } from "@/lib/types";
+
+// Code-split echarts-for-react (pulls in the heavy echarts core). ChartView is
+// only mounted for the donut/columns chart types, so bar_race screens never load
+// echarts. ssr:false because ECharts renders to canvas on the client only.
+const ReactECharts = dynamic(() => import("echarts-for-react"), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="flex h-full min-h-[240px] w-full items-center justify-center text-text-dim"
+      aria-hidden
+    >
+      Cargando gráfico…
+    </div>
+  ),
+});
+
+// ECharts renders to a canvas and cannot resolve CSS custom properties, so a
+// literal font stack is required. next/font/google exposes "Overpass" and "Inter"
+// as concrete family names; the display stack resolves Overpass first, then Inter.
+const CHART_FONT_FAMILY = "Overpass, Inter, ui-sans-serif, system-ui, sans-serif";
 
 /**
  * ChartView — ECharts renderer for the `donut` and `columns` chart types.
@@ -30,7 +50,12 @@ export interface ChartViewProps {
   showNames: boolean;
 }
 
-export function ChartView({ type, teams, showLegend, showNames }: ChartViewProps) {
+export const ChartView = memo(function ChartView({
+  type,
+  teams,
+  showLegend,
+  showNames,
+}: ChartViewProps) {
   const option = useMemo<EChartsOption>(() => {
     const colorFor = (t: RankedTeam) =>
       t.rank === 1 && t.count > 0 ? EY_YELLOW : t.color;
@@ -41,7 +66,7 @@ export function ChartView({ type, teams, showLegend, showNames }: ChartViewProps
       animationDurationUpdate: 600,
       animationEasing: "cubicOut",
       animationEasingUpdate: "cubicOut",
-      textStyle: { color: TEXT, fontFamily: "var(--font-display), sans-serif" },
+      textStyle: { color: TEXT, fontFamily: CHART_FONT_FAMILY },
     };
 
     if (type === "donut") {
@@ -150,6 +175,6 @@ export function ChartView({ type, teams, showLegend, showNames }: ChartViewProps
       opts={{ renderer: "canvas" }}
     />
   );
-}
+});
 
 export default ChartView;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { addAdmin, removeAdmin } from "@/app/admin/(panel)/admins/admin-actions";
 
 /**
@@ -18,7 +17,6 @@ export function AdminsManager({
   admins: string[];
   currentEmail: string | null;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +34,7 @@ export function AdminsManager({
         return;
       }
       setEmail("");
-      router.refresh();
+      // Server action already revalidatePath("/admin/admins"); no manual refresh.
     });
   }
 
@@ -49,7 +47,7 @@ export function AdminsManager({
         return;
       }
       setConfirming(null);
-      router.refresh();
+      // Server action already revalidatePath("/admin/admins"); no manual refresh.
     });
   }
 

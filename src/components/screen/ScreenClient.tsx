@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ShaderBackground } from "@/components/providers/ShaderBackground";
 import { CodeBadge } from "@/components/atoms/CodeBadge";
@@ -160,7 +161,7 @@ function StageWrap({
  * latecomers can still join, and the live visualization on the right driven by
  * the poll's chart_type.
  */
-function LiveStage({
+const LiveStage = memo(function LiveStage({
   poll,
   voterUrl,
   liveTeams,
@@ -200,9 +201,9 @@ function LiveStage({
       </div>
     </div>
   );
-}
+});
 
-function ConnectionDot({
+const ConnectionDot = memo(function ConnectionDot({
   state,
 }: {
   state: ReturnType<typeof useLiveTally>["connectionState"];
@@ -231,6 +232,6 @@ function ConnectionDot({
       {label}
     </span>
   );
-}
+});
 
 export default ScreenClient;

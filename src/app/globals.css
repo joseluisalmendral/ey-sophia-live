@@ -123,3 +123,28 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Countdown urgency pulse. Referenced by CountdownTimer via the Tailwind
+ * arbitrary-animation class `animate-[countdownPulse_1s_ease-in-out_infinite]`.
+ * Defined globally (instead of a per-instance <style> tag) so it is declared
+ * once. The reduced-motion override above already kills the animation, but the
+ * explicit rule below keeps the intent clear for the timer specifically.
+ */
+@keyframes countdownPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [role="timer"] {
+    animation: none !important;
+  }
+}

@@ -82,7 +82,7 @@ export function SophiaBanner({
             alt="thePower"
             width={isHero ? 96 : 72}
             height={isHero ? 24 : 18}
-            className="h-auto w-auto opacity-90"
+            className="opacity-90"
             priority={isHero}
           />
         </div>

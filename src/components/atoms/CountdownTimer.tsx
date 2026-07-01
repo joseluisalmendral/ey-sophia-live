@@ -75,15 +75,6 @@ export function CountdownTimer({
       }
     >
       {format(ms)}
-      <style>{`
-        @keyframes countdownPulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.72; transform: scale(1.06); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          [role="timer"] { animation: none !important; }
-        }
-      `}</style>
     </span>
   );
 }

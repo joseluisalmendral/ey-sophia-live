@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { QrCode } from "@/components/atoms/QrCode";
 import { CodeBadge } from "@/components/atoms/CodeBadge";
@@ -32,7 +33,7 @@ export interface LobbyStageProps {
   reduced: boolean;
 }
 
-export function LobbyStage({
+export const LobbyStage = memo(function LobbyStage({
   poll,
   teams,
   liveTeams,
@@ -160,6 +161,6 @@ export function LobbyStage({
       </div>
     </div>
   );
-}
+});
 
 export default LobbyStage;

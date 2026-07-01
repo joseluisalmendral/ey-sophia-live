@@ -1,8 +1,19 @@
 "use client";
 
 import { Component, type ReactNode, useSyncExternalStore } from "react";
-import { MeshGradient } from "@paper-design/shaders-react";
+import dynamic from "next/dynamic";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
+
+/**
+ * MeshGradient is the heaviest dependency on the page (WebGL/OGL). Lazy-load it
+ * so it never lands in the initial bundle. `ssr: false` because it only renders
+ * client-side behind the `useShader` gate; the StaticCosmic CSS floor already
+ * paints synchronously, so no `loading` fallback is needed.
+ */
+const MeshGradient = dynamic(
+  () => import("@paper-design/shaders-react").then((m) => m.MeshGradient),
+  { ssr: false },
+);
 
 /**
  * ShaderBackground — the cosmic mesh-gradient stage behind every premium

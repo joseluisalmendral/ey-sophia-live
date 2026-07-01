@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -68,6 +69,27 @@ async function resolveOrigin(): Promise<string> {
   const proto =
     h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;
+}
+
+/** Per-poll <title> so each projector tab is identifiable. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ poll: string }>;
+}): Promise<Metadata> {
+  const { poll: pollParam } = await params;
+  const supabase = await createClient();
+  const column = UUID_RE.test(pollParam) ? "id" : "join_code";
+  const value = column === "join_code" ? pollParam.toUpperCase() : pollParam;
+  const { data } = await supabase
+    .from("polls")
+    .select("title")
+    .eq(column, value)
+    .maybeSingle<{ title: string }>();
+  const title = data?.title
+    ? `${data.title} · Pantalla · EY SophIA Live`
+    : "Pantalla · EY SophIA Live";
+  return { title };
 }
 
 export default async function ScreenPage({

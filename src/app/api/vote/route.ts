@@ -146,5 +146,23 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
   }
 
+  // On a confirmed vote, drop a READABLE (non-httpOnly) marker scoped to /vote
+  // so the vote page's server component can render the "already voted" view on
+  // reload. This is NOT a security wall — the signed httpOnly `vt_<pollId>`
+  // cookie above remains the only anti-fraud guard. The marker carries no team
+  // identity (neutral signal only) and is path-scoped to /vote (the dedup
+  // cookie's /api/vote path never reaches the page).
+  if (result === "ok") {
+    res.cookies.set({
+      name: `voted_${pollId}`,
+      value: "1",
+      httpOnly: false,
+      secure: true,
+      sameSite: "lax",
+      path: "/vote",
+      maxAge: 60 * 60 * 12, // Match the dedup cookie lifetime.
+    });
+  }
+
   return res;
 }

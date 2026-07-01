@@ -1,9 +1,21 @@
 "use client";
 
 import { useMemo } from "react";
-import ReactECharts from "echarts-for-react";
+import dynamic from "next/dynamic";
 import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
+
+// Code-split echarts-for-react (pulls in the heavy echarts core). Analytics is a
+// separate admin route, so echarts stays out of every other bundle. ssr:false
+// because ECharts renders on the client only.
+const ReactECharts = dynamic(() => import("echarts-for-react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[280px] w-full items-center justify-center text-text-dim">
+      Cargando gráfico…
+    </div>
+  ),
+});
 
 /**
  * AnalyticsDashboard — PII-free past-poll review.

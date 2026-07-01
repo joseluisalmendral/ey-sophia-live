@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { EyBeam } from "@/components/brand/EyBeam";
+import { siteUrl } from "@/lib/utils/siteUrl";
 
 /**
  * Admin magic-link login — /admin/login
@@ -15,13 +16,6 @@ import { EyBeam } from "@/components/brand/EyBeam";
  *
  * SITE_URL resolves from NEXT_PUBLIC_SITE_URL, falling back to localhost for dev.
  */
-
-function siteUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
-  if (typeof window !== "undefined") return window.location.origin;
-  return "http://localhost:3000";
-}
 
 type Phase = "idle" | "sending" | "sent" | "error";
 

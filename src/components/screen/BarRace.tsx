@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "motion/react";
 import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
@@ -35,7 +36,7 @@ export interface BarRaceProps {
   frozen?: boolean;
 }
 
-export function BarRace({
+export const BarRace = memo(function BarRace({
   teams,
   showNames,
   reduced,
@@ -144,6 +145,6 @@ export function BarRace({
       })}
     </ul>
   );
-}
+});
 
 export default BarRace;

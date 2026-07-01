@@ -1,14 +1,9 @@
 /**
- * URL helpers for the voter and projector surfaces. SITE_URL resolves from
- * NEXT_PUBLIC_SITE_URL (set per-environment), falling back to the current
- * origin in the browser and localhost on the server during dev.
+ * URL helpers for the voter and projector surfaces. The origin resolves via the
+ * shared `siteUrl()` helper (NEXT_PUBLIC_SITE_URL, else browser origin, else
+ * localhost).
  */
-export function siteUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
-  if (typeof window !== "undefined") return window.location.origin;
-  return "http://localhost:3000";
-}
+import { siteUrl } from "@/lib/utils/siteUrl";
 
 /** Voter join URL by join code (works for /vote/[poll] which accepts a code). */
 export function voteUrl(joinCode: string): string {

@@ -52,19 +52,29 @@ export function LiveControlPanel({
   joinCode,
   initialStatus,
   hasCountdown,
+  enabled = true,
 }: {
   pollId: string;
   joinCode: string;
   initialStatus: PollStatus;
   hasCountdown: boolean;
+  /**
+   * When false, the panel stays mounted but does NOT open a realtime
+   * subscription. PollWorkspace keeps the inactive tab mounted (to preserve
+   * state) and passes `enabled={tab === "live"}` so only the visible tab
+   * subscribes.
+   */
+  enabled?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
 
-  // Live mirror of what the room sees (subscribes to poll:<id>).
-  const { teams, status: liveStatus, connectionState } = useLiveTally(pollId);
+  // Live mirror of what the room sees (subscribes to poll:<id> when enabled).
+  const { teams, status: liveStatus, connectionState } = useLiveTally(pollId, {
+    enabled,
+  });
   // Prefer the realtime status once it arrives; fall back to the server snapshot.
   const status = liveStatus ?? initialStatus;
   const action = nextAction(status, hasCountdown);

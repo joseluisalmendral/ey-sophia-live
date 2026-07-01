@@ -1,38 +1,38 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
-import confetti from "canvas-confetti";
 import { durations } from "@/lib/motion/tokens";
+import { fireConfettiBurst, startFireworksFinale } from "@/lib/effects/fireworks";
+import { playWinnerSting, type WinnerStingHandle } from "@/lib/effects/winnerSting";
 import { Podium } from "./Podium";
-import { resolveReveal } from "./winner";
+import { resolveReveal, type RevealOutcome } from "./winner";
 import type { RankedTeam, TieRule } from "@/lib/types";
 
 /**
  * RevealStage — the CLOSED state finale: a 3-beat reveal choreography.
  *
  * Beats (driven by a single timed sequence; respects reduced-motion):
- *   (a) FREEZE + DIM  — the stage dims, suspense kicker fades in, audio sting
- *       attempts to play (mute toggle provided; degrades silently if blocked).
+ *   (a) FREEZE + DIM  — the stage dims, suspense kicker fades in.
  *   (b) SUSPENSE HOLD — "Calculando ganador…" shimmer for ~2.4s. The pause IS
  *       the finale.
  *   (c) PODIUM        — the top-3 morph into the Olympic-asymmetry podium
  *       (Podium handles the rise + crown drop + score slam), then a confetti
- *       edge-burst at the landing frame, then a ~4s sustained fireworks finale
- *       (rising shells + airbursts) that STOPS (never persistent).
+ *       edge-burst at the landing frame + a WebAudio triumphant sting, then a
+ *       ~4s sustained fireworks finale (rising shells + airbursts) that STOPS
+ *       (never persistent).
  *
- * Finale engine note: we drive both the edge-burst and the sustained "fireworks"
- * with canvas-confetti (airburst shells launched on an interval), rather than the
- * @tsparticles/fireworks preset. That preset's dependency tree is incomplete in
- * this install (missing transitive @tsparticles/plugin-interactivity) and adding
- * deps is out of scope here; canvas-confetti is fully present and gives the same
- * cinematic effect with a guaranteed clean build and a hard stop.
+ * Finale engine note: both the edge-burst and the sustained "fireworks" are
+ * driven by canvas-confetti (airburst shells launched on an interval), which is
+ * now LAZY-loaded from src/lib/effects/fireworks.ts — it only downloads when the
+ * reveal actually fires. The audio sting is WebAudio-synthesized in code
+ * (src/lib/effects/winnerSting.ts); no asset is shipped.
  *
  * Tie + zero-vote: winner resolution is delegated to resolveReveal(); a zero-vote
  * close renders a designed "Sin votos esta vez" state (no crown, no crash).
  *
  * Reduced motion: the whole thing collapses to crossfades — static crown (Podium),
- * no confetti/fireworks (disableForReducedMotion), shorter suspense.
+ * no confetti/fireworks/audio, shorter suspense.
  */
 
 type Beat = "suspense" | "podium";
@@ -43,41 +43,38 @@ export interface RevealStageProps {
   reduced: boolean;
 }
 
-export function RevealStage({ teams, tieRule, reduced }: RevealStageProps) {
-  const outcome = resolveReveal(teams, tieRule);
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * useRevealChoreography — owns all imperative reveal behavior:
+ * the beat state machine + timers, the confetti/fireworks engine (with cleanup),
+ * and the WebAudio winner sting. Returns the current beat plus the mute state
+ * and toggle. Consumers become pure presentation over `beat` + `muted`.
+ */
+function useRevealChoreography(outcome: RevealOutcome, reduced: boolean) {
   const [beat, setBeat] = useState<Beat>("suspense");
   const [scope, animate] = useAnimate();
 
-  // Interval handle for the sustained fireworks finale (so it can be stopped).
-  const finaleTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Audio sting: muted by default-safe — we ATTEMPT autoplay and expose a toggle.
+  // Audio sting: attempted best-effort at the crown/confetti landing beat.
   const [muted, setMuted] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mutedRef = useRef(muted);
+  // Mirror into the ref from an effect (never during render — React Compiler rule);
+  // the choreography effect reads `.current` at the fire moment.
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
+  const stingRef = useRef<WinnerStingHandle | null>(null);
 
-  // Run the timed beat sequence once on mount.
   useEffect(() => {
     let cancelled = false;
+    let stopFireworks: (() => void) | null = null;
     const suspenseMs = reduced ? 700 : durations.suspense * 1000;
-
-    const stopFinale = () => {
-      if (finaleTimer.current) {
-        clearInterval(finaleTimer.current);
-        finaleTimer.current = null;
-      }
-    };
 
     const run = async () => {
       // Beat (a) dim is handled by the scope's animate below.
       await animate(scope.current, { opacity: 1 }, { duration: durations.base / 1.5 });
-
-      // Attempt audio sting (best-effort; autoplay may be blocked).
-      if (!reduced && audioRef.current) {
-        audioRef.current.volume = 0.6;
-        audioRef.current.play().catch(() => {
-          /* autoplay blocked — degrade silently, user can unmute */
-        });
-      }
 
       await wait(suspenseMs);
       if (cancelled) return;
@@ -87,47 +84,53 @@ export function RevealStage({ teams, tieRule, reduced }: RevealStageProps) {
         // Confetti edge-burst at podium landing (high zIndex, reduced-safe).
         await wait(900);
         if (cancelled) return;
-        fireConfettiBurst();
+        void fireConfettiBurst();
+
+        // WebAudio triumphant sting at the crown/confetti beat (best-effort).
+        if (!mutedRef.current) {
+          stingRef.current = playWinnerSting();
+        }
 
         // Sustained fireworks finale: airburst shells on an interval, then STOP.
-        finaleTimer.current = setInterval(fireFireworkShell, 380);
-        await wait(durations.fireworks * 1000);
-        stopFinale(); // never persistent
+        stopFireworks = startFireworksFinale(durations.fireworks * 1000);
       }
     };
     void run();
 
     return () => {
       cancelled = true;
-      stopFinale();
+      stopFireworks?.();
+      stingRef.current?.stop();
+      stingRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggleMute = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (muted) {
-      a.muted = false;
-      a.play().catch(() => {});
-      setMuted(false);
-    } else {
-      a.muted = true;
-      setMuted(true);
-    }
-  };
+  const toggleMute = useCallback(() => {
+    setMuted((prev) => {
+      const next = !prev;
+      if (next) {
+        // Muting mid-reveal: stop any in-flight sting.
+        stingRef.current?.stop();
+        stingRef.current = null;
+      }
+      return next;
+    });
+  }, []);
+
+  return { beat, scope, muted, toggleMute };
+}
+
+export function RevealStage({ teams, tieRule, reduced }: RevealStageProps) {
+  const outcome = resolveReveal(teams, tieRule);
+  const { beat, scope, muted, toggleMute } = useRevealChoreography(outcome, reduced);
 
   return (
     <div ref={scope} className="relative h-full w-full" style={{ opacity: 0 }}>
       {/* Dim veil over the frozen stage. */}
       <div className="pointer-events-none absolute inset-0 bg-cosmic-deep/55" aria-hidden />
 
-      {/* Audio sting element (no asset shipped — wired for one if added later). */}
-      <audio ref={audioRef} preload="auto" aria-hidden>
-        <source src="/sfx/winner-sting.mp3" type="audio/mpeg" />
-      </audio>
-
-      {/* Mute toggle (always available, degrades if no audio). */}
+      {/* Mute toggle (always available). */}
       <button
         type="button"
         onClick={toggleMute}
@@ -201,62 +204,6 @@ function ZeroVotes({ reduced }: { reduced: boolean }) {
       </p>
     </div>
   );
-}
-
-/** Confetti edge-burst from both lower corners toward center. */
-function fireConfettiBurst() {
-  const colors = ["#FFE600", "#96d3b4", "#7DB8FF", "#FFFFFF"];
-  const common: confetti.Options = {
-    particleCount: 90,
-    spread: 70,
-    startVelocity: 55,
-    colors,
-    disableForReducedMotion: true,
-    zIndex: 200,
-  };
-  confetti({ ...common, angle: 60, origin: { x: 0, y: 1 } });
-  confetti({ ...common, angle: 120, origin: { x: 1, y: 1 } });
-  // A center pop a beat later.
-  setTimeout(() => {
-    confetti({
-      particleCount: 140,
-      spread: 120,
-      startVelocity: 45,
-      origin: { x: 0.5, y: 0.55 },
-      colors,
-      disableForReducedMotion: true,
-      zIndex: 200,
-    });
-  }, 250);
-}
-
-/**
- * One airburst "firework shell": a tight high-velocity radial burst at a random
- * point in the upper stage, simulating an exploding shell. Called on an interval
- * to build the sustained finale, then the interval is cleared (never persistent).
- */
-function fireFireworkShell() {
-  const colors = ["#FFE600", "#96d3b4", "#7DB8FF", "#FFFFFF"];
-  const x = 0.2 + Math.random() * 0.6;
-  const y = 0.2 + Math.random() * 0.35;
-  confetti({
-    particleCount: 60,
-    startVelocity: 38,
-    spread: 360,
-    ticks: 90,
-    gravity: 1.1,
-    decay: 0.92,
-    scalar: 1.05,
-    origin: { x, y },
-    colors,
-    shapes: ["circle"],
-    disableForReducedMotion: true,
-    zIndex: 200,
-  });
-}
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 function SpeakerOn() {
