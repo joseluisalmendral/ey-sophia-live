@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { pickTextOn } from "@/lib/utils/contrast";
 import { generateJoinCode } from "./joinCode";
+import { colorForTeamName, KEYWORD_COLORS } from "./teamColorKeywords";
 import {
   createPoll,
   updatePoll,
@@ -27,6 +28,12 @@ interface TeamDraft {
   id?: string;
   name: string;
   color: string;
+  /**
+   * The operator touched this row's color picker AFTER the last keyword
+   * auto-assignment — from then on the name never overwrites their choice.
+   * UI-only; stripped from the save payload.
+   */
+  colorTouched?: boolean;
 }
 
 export interface PollConfigInitial {
@@ -52,6 +59,16 @@ const DEFAULT_COLORS = [
   "#C792EA",
   "#FFB86C",
 ];
+
+/**
+ * Colors this form can produce on its own (keyword auto-assignment + default
+ * palette). A SAVED team whose color is NOT in this set was hand-picked by the
+ * operator, so a later name edit must never auto-overwrite it — colorTouched
+ * only lives for the current render session and is lost after saving.
+ */
+const AUTO_ASSIGNABLE_COLORS = new Set(
+  [...KEYWORD_COLORS, ...DEFAULT_COLORS].map((c) => c.toLowerCase()),
+);
 
 export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
   const router = useRouter();
@@ -89,6 +106,36 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
 
   function updateTeam(i: number, patch: Partial<TeamDraft>) {
     setTeams((prev) => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
+  }
+
+  /**
+   * Name edits may auto-assign the color from a Spanish color keyword in the
+   * name ("Equipo Rojo" → red), accent/case-insensitive. Auto-assignment only
+   * applies while the operator has NOT customized that row's color by hand
+   * after the last auto-set (colorTouched resets on every auto-set, so typing
+   * a new color word keeps working after a manual tweak → new keyword wins
+   * only when the picker was untouched since).
+   *
+   * EXISTING teams (t.id present) add a persistence-safe heuristic: colorTouched
+   * does not survive a save, so a saved custom color would otherwise be
+   * clobbered by fixing a typo in a keyword name ("Equipo Rojo" saved blue →
+   * back to red). Auto-assignment only applies when the current color already
+   * looks auto-assigned (keyword map or default palette); anything else is
+   * treated as a deliberate custom choice and preserved.
+   */
+  function updateTeamName(i: number, name: string) {
+    setTeams((prev) =>
+      prev.map((t, idx) => {
+        if (idx !== i) return t;
+        const looksCustom =
+          Boolean(t.id) && !AUTO_ASSIGNABLE_COLORS.has(t.color.toLowerCase());
+        const keywordColor =
+          t.colorTouched || looksCustom ? null : colorForTeamName(name);
+        return keywordColor
+          ? { ...t, name, color: keywordColor, colorTouched: false }
+          : { ...t, name };
+      }),
+    );
   }
   function addTeam() {
     setTeams((prev) => [
@@ -210,7 +257,7 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
               </span>
               <input
                 value={t.name}
-                onChange={(e) => updateTeam(i, { name: e.target.value })}
+                onChange={(e) => updateTeamName(i, e.target.value)}
                 placeholder={`Equipo ${i + 1}`}
                 disabled={locked}
                 className={`${inputCls} flex-1`}
@@ -218,7 +265,9 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
               <input
                 type="color"
                 value={t.color}
-                onChange={(e) => updateTeam(i, { color: e.target.value })}
+                onChange={(e) =>
+                  updateTeam(i, { color: e.target.value, colorTouched: true })
+                }
                 disabled={locked}
                 aria-label={`Color del equipo ${i + 1}`}
                 className="h-11 w-12 shrink-0 cursor-pointer rounded-lg border border-white/15 bg-surface disabled:opacity-60"

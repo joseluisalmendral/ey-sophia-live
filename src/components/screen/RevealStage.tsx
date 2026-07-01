@@ -7,35 +7,40 @@ import { fireConfettiBurst, startFireworksFinale } from "@/lib/effects/fireworks
 import { playWinnerSting, type WinnerStingHandle } from "@/lib/effects/winnerSting";
 import { Podium } from "./Podium";
 import { resolveReveal, type RevealOutcome } from "./winner";
+import { ColorHint } from "./reveal/ColorHint";
+import { NameTease } from "./reveal/NameTease";
+import { Curtain } from "./reveal/Curtain";
+import { REVEAL_BEATS, REVEAL_BEATS_REDUCED } from "./reveal/constants";
 import type { RankedTeam, TieRule } from "@/lib/types";
 
 /**
- * RevealStage — the CLOSED state finale: a 3-beat reveal choreography.
+ * RevealStage — the CLOSED state finale, now a 6-beat CINEMATIC arc:
  *
- * Beats (driven by a single timed sequence; respects reduced-motion):
- *   (a) FREEZE + DIM  — the stage dims, suspense kicker fades in.
- *   (b) SUSPENSE HOLD — "Calculando ganador…" shimmer for ~2.4s. The pause IS
- *       the finale.
- *   (c) PODIUM        — the top-3 morph into the Olympic-asymmetry podium
- *       (Podium handles the rise + crown drop + score slam), then a confetti
- *       edge-burst at the landing frame + a WebAudio triumphant sting, then a
- *       ~4s sustained fireworks finale (rising shells + airbursts) that STOPS
- *       (never persistent).
+ *   (a) DIM       — the stage dims over the frozen race.
+ *   (b) SUSPENSE  — "Y el equipo ganador es…" hold; at the END of this beat the
+ *       final outcome is captured from the live ref (fire-time, never mount-time).
+ *   (c) COLOR HINT — the winner's team color blooms across the dark (both colors
+ *       on a double crown). First clue, no names.
+ *   (d) NAME TEASE — ~45% of the winner's name locks in, the rest keeps cycling
+ *       glitched glyphs in the team color. Second clue.
+ *   (e) TELÓN     — a 3D theatre curtain slams shut: EY SophIA (IA in purple) on
+ *       the left panel, thePower on the right, gold seam, roaming sheen,
+ *       "Y el equipo ganador es…" pulsing on the join.
+ *   (f) PODIUM    — the curtain swings open (rotateY, hinged at screen edges)
+ *       onto the existing podium climax: rise + crown + confetti edge-burst +
+ *       WebAudio sting + ~4s fireworks finale that STOPS.
  *
- * Finale engine note: both the edge-burst and the sustained "fireworks" are
- * driven by canvas-confetti (airburst shells launched on an interval), which is
- * now LAZY-loaded from src/lib/effects/fireworks.ts — it only downloads when the
- * reveal actually fires. The audio sting is WebAudio-synthesized in code
- * (src/lib/effects/winnerSting.ts); no asset is shipped.
+ * Timings live in reveal/constants.ts (~11s full arc, ~5s reduced).
  *
- * Tie + zero-vote: winner resolution is delegated to resolveReveal(); a zero-vote
- * close renders a designed "Sin votos esta vez" state (no crown, no crash).
- *
- * Reduced motion: the whole thing collapses to crossfades — static crown (Podium),
- * no confetti/fireworks/audio, shorter suspense.
+ * Zero votes: hint + name-tease beats are skipped (no winner to tease); the
+ * curtain still opens onto the designed "Sin votos esta vez" state.
+ * Ties: resolveReveal() decides double_crown; hint/tease/podium all render both
+ * co-winners. Reduced motion: same beats, compressed, crossfades only, no
+ * confetti/fireworks/audio. The `ready` gate is unchanged: nothing starts until
+ * the initial absolute tally has resolved.
  */
 
-type Beat = "suspense" | "podium";
+type Beat = "suspense" | "hint" | "name" | "curtain" | "podium";
 
 export interface RevealStageProps {
   teams: RankedTeam[];
@@ -55,10 +60,10 @@ function wait(ms: number) {
 }
 
 /**
- * useRevealChoreography — owns all imperative reveal behavior:
- * the beat state machine + timers, the confetti/fireworks engine (with cleanup),
- * and the WebAudio winner sting. Returns the current beat plus the mute state
- * and toggle. Consumers become pure presentation over `beat` + `muted`.
+ * useRevealChoreography — owns all imperative reveal behavior: the beat state
+ * machine + timers, the fire-time outcome capture, the confetti/fireworks
+ * engine (with cleanup), and the WebAudio winner sting. Consumers become pure
+ * presentation over `beat` + `finalOutcome` + `muted`.
  */
 function useRevealChoreography(
   outcome: RevealOutcome,
@@ -66,9 +71,12 @@ function useRevealChoreography(
   ready: boolean,
 ) {
   const [beat, setBeat] = useState<Beat>("suspense");
+  // Captured at the end of the suspense beat: the outcome the teasers and the
+  // podium celebrate. Null until then.
+  const [finalOutcome, setFinalOutcome] = useState<RevealOutcome | null>(null);
   const [scope, animate] = useAnimate();
 
-  // useLatest: the choreography effect reads the outcome at FIRE time (after the
+  // useLatest: the choreography reads the outcome at FIRE time (after the
   // suspense beat), never from a mount-time closure — live.teams seeds async, so
   // the mount-time outcome is usually the empty zero-votes snapshot.
   const outcomeRef = useRef(outcome);
@@ -79,35 +87,54 @@ function useRevealChoreography(
   // Audio sting: attempted best-effort at the crown/confetti landing beat.
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(muted);
-  // Mirror into the ref from an effect (never during render — React Compiler rule);
-  // the choreography effect reads `.current` at the fire moment.
   useEffect(() => {
     mutedRef.current = muted;
   }, [muted]);
   const stingRef = useRef<WinnerStingHandle | null>(null);
 
   useEffect(() => {
-    // Gate the whole choreography on the initial tally being seeded: the beats
-    // and timings stay exactly as designed, they just start from real data.
+    // Gate the whole choreography on the initial tally being seeded.
     if (!ready) return;
     let cancelled = false;
     let stopFireworks: (() => void) | null = null;
-    const suspenseMs = reduced ? 700 : durations.suspense * 1000;
+    const t = reduced ? REVEAL_BEATS_REDUCED : REVEAL_BEATS;
 
     const run = async () => {
-      // Beat (a) dim is handled by the scope's animate below.
-      await animate(scope.current, { opacity: 1 }, { duration: durations.base / 1.5 });
+      // Beat (a) DIM.
+      await animate(scope.current, { opacity: 1 }, { duration: t.dim });
 
-      await wait(suspenseMs);
+      // Beat (b) SUSPENSE.
+      await wait(t.suspense * 1000);
       if (cancelled) return;
+
+      // Fire-time outcome: decides the whole arc from the real final tally.
+      const fo = outcomeRef.current;
+      setFinalOutcome(fo);
+      const hasWinner = !fo.zeroVotes && fo.winners.length > 0;
+
+      if (hasWinner) {
+        // Beat (c) COLOR HINT.
+        setBeat("hint");
+        await wait(t.hint * 1000);
+        if (cancelled) return;
+
+        // Beat (d) NAME TEASE.
+        setBeat("name");
+        await wait(t.name * 1000);
+        if (cancelled) return;
+      }
+
+      // Beat (e) TELÓN — closed hold with the co-brand.
+      setBeat("curtain");
+      await wait(t.curtainHold * 1000);
+      if (cancelled) return;
+
+      // Beat (f) PODIUM — the curtain's AnimatePresence exit IS the opening.
       setBeat("podium");
 
-      // Fire-time outcome (not the mount-time closure): decides the celebration
-      // from the real final tally.
-      const finalOutcome = outcomeRef.current;
-      if (!reduced && !finalOutcome.zeroVotes && finalOutcome.winners.length > 0) {
-        // Confetti edge-burst at podium landing (high zIndex, reduced-safe).
-        await wait(900);
+      if (!reduced && hasWinner) {
+        // Confetti edge-burst once the curtain is open and the plinths land.
+        await wait(t.curtainOpen * 1000 + 500);
         if (cancelled) return;
         void fireConfettiBurst();
 
@@ -136,7 +163,6 @@ function useRevealChoreography(
     setMuted((prev) => {
       const next = !prev;
       if (next) {
-        // Muting mid-reveal: stop any in-flight sting.
         stingRef.current?.stop();
         stingRef.current = null;
       }
@@ -144,16 +170,19 @@ function useRevealChoreography(
     });
   }, []);
 
-  return { beat, scope, muted, toggleMute };
+  return { beat, finalOutcome, scope, muted, toggleMute };
 }
 
 export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps) {
-  const outcome = resolveReveal(teams, tieRule);
-  const { beat, scope, muted, toggleMute } = useRevealChoreography(
-    outcome,
+  const liveOutcome = resolveReveal(teams, tieRule);
+  const { beat, finalOutcome, scope, muted, toggleMute } = useRevealChoreography(
+    liveOutcome,
     reduced,
     ready,
   );
+  // Teasers/podium always celebrate the captured fire-time outcome.
+  const outcome = finalOutcome ?? liveOutcome;
+  const curtainOpenSeconds = (reduced ? REVEAL_BEATS_REDUCED : REVEAL_BEATS).curtainOpen;
 
   return (
     <div ref={scope} className="relative h-full w-full" style={{ opacity: 0 }}>
@@ -170,6 +199,7 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
         {muted ? <SpeakerOff /> : <SpeakerOn />}
       </button>
 
+      {/* Teasing + climax beats */}
       <AnimatePresence mode="wait">
         {beat === "suspense" && (
           <motion.div
@@ -188,28 +218,62 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
               transition={reduced ? undefined : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
               className="font-display text-[clamp(2rem,6vw,5.5rem)] font-black leading-none text-text"
             >
-              Calculando ganador…
+              Y el equipo ganador es…
             </motion.h2>
           </motion.div>
         )}
 
-        {beat === "podium" && (
+        {beat === "hint" && (
           <motion.div
-            key="podium"
+            key="hint"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: durations.base }}
+            className="relative z-10 h-full"
+          >
+            <ColorHint winners={outcome.winners} reduced={reduced} />
+          </motion.div>
+        )}
+
+        {beat === "name" && (
+          <motion.div
+            key="name"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: durations.base }}
+            className="relative z-10 h-full"
+          >
+            <NameTease winners={outcome.winners} reduced={reduced} />
+          </motion.div>
+        )}
+
+        {(beat === "curtain" || beat === "podium") && (
+          <motion.div
+            key="climax"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: durations.base }}
             className="relative z-10 h-full"
           >
-            {outcome.zeroVotes ? (
-              <ZeroVotes reduced={reduced} />
-            ) : (
-              <Podium outcome={outcome} reduced={reduced} />
-            )}
+            {/* The podium mounts behind the curtain and is unveiled as it opens. */}
+            {beat === "podium" &&
+              (outcome.zeroVotes ? (
+                <ZeroVotes reduced={reduced} />
+              ) : (
+                <Podium outcome={outcome} reduced={reduced} />
+              ))}
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* TELÓN overlay — its AnimatePresence exit is the theatre opening. */}
+      <AnimatePresence>
+        {beat === "curtain" && (
+          <Curtain reduced={reduced} openSeconds={curtainOpenSeconds} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

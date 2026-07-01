@@ -57,7 +57,19 @@ export const ChartView = memo(function ChartView({
   showLegend,
   showNames,
 }: ChartViewProps) {
+  // ECharts only takes numeric px font sizes (no CSS clamp/vw), so we scale a
+  // 1280px-wide baseline by the real viewport width, clamped to a sane band.
+  // Read once per mount — projectors don't resize mid-show, and a reload after
+  // a window move is acceptable. Guarded for the SSR pass of the page shell.
+  const vwScale =
+    typeof window === "undefined"
+      ? 1
+      : Math.min(1.7, Math.max(0.75, window.innerWidth / 1280));
+
   const option = useMemo<EChartsOption>(() => {
+    // Projector-legible type scale: values/labels must read from the back of a
+    // room, so all data/axis fonts run notably larger than chart defaults.
+    const fs = (base: number) => Math.round(base * vwScale);
     const colorFor = (t: RankedTeam) =>
       t.rank === 1 && t.count > 0 ? EY_YELLOW : t.color;
 
@@ -77,7 +89,7 @@ export const ChartView = memo(function ChartView({
         legend: showLegend
           ? {
               bottom: 8,
-              textStyle: { color: TEXT_DIM, fontSize: 18 },
+              textStyle: { color: TEXT_DIM, fontSize: fs(24) },
               icon: "circle",
             }
           : { show: false },
@@ -95,8 +107,9 @@ export const ChartView = memo(function ChartView({
             label: {
               show: showNames,
               color: TEXT,
-              fontSize: 22,
+              fontSize: fs(32),
               fontWeight: "bold",
+              lineHeight: fs(38),
               formatter: "{b}\n{c}",
             },
             labelLine: { show: showNames, lineStyle: { color: TEXT_DIM } },
@@ -126,9 +139,12 @@ export const ChartView = memo(function ChartView({
         axisLabel: {
           show: showNames,
           color: TEXT,
-          fontSize: 22,
+          fontSize: fs(30),
           fontWeight: "bold",
           interval: 0,
+          // Long team names: wrap instead of colliding at the bigger size.
+          overflow: "break",
+          width: fs(240),
         },
         axisLine: { lineStyle: { color: "rgba(255,255,255,0.12)" } },
         axisTick: { show: false },
@@ -141,7 +157,7 @@ export const ChartView = memo(function ChartView({
         // null lets ECharts auto-scale the empty grid before any votes land.
         max: columnsYAxisMax(Math.max(0, ...teams.map((t) => t.count))) ?? undefined,
         minInterval: 1,
-        axisLabel: { color: TEXT_DIM, fontSize: 16 },
+        axisLabel: { color: TEXT_DIM, fontSize: fs(22) },
         splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
       },
       series: [
@@ -156,7 +172,7 @@ export const ChartView = memo(function ChartView({
           label: {
             show: true,
             color: TEXT,
-            fontSize: 26,
+            fontSize: fs(40),
             fontWeight: "bold",
           },
           // Vote count anchored INSIDE the column at its base (live AND reveal),
@@ -181,7 +197,7 @@ export const ChartView = memo(function ChartView({
         },
       ],
     };
-  }, [type, teams, showLegend, showNames]);
+  }, [type, teams, showLegend, showNames, vwScale]);
 
   return (
     <ReactECharts

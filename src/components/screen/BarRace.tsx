@@ -77,7 +77,7 @@ export const BarRace = memo(function BarRace({
             <div className="flex items-center gap-[clamp(0.5rem,1.2vw,1rem)]">
               {/* Rank pill */}
               <span
-                className="flex w-[clamp(2.2rem,3vw,3.2rem)] shrink-0 items-center justify-center font-display text-[clamp(1.1rem,1.9vw,1.9rem)] font-black tabular-nums"
+                className="flex w-[clamp(2.6rem,3.6vw,3.9rem)] shrink-0 items-center justify-center font-display text-[clamp(1.3rem,2.4vw,2.5rem)] font-black tabular-nums"
                 style={{ color: isLeader ? "var(--color-ey-yellow)" : "var(--color-text-dim)" }}
                 aria-hidden
               >
@@ -116,7 +116,7 @@ export const BarRace = memo(function BarRace({
                     />
                     {showNames && (
                       <span
-                        className="truncate font-display text-[clamp(1rem,1.9vw,1.9rem)] font-extrabold"
+                        className="truncate font-display text-[clamp(1.2rem,2.4vw,2.5rem)] font-extrabold"
                         style={{
                           color: isLeader ? fg : "var(--color-text)",
                           textShadow: isLeader
@@ -132,9 +132,9 @@ export const BarRace = memo(function BarRace({
               </div>
 
               {/* Count + (optional) percentage, outside the bar so it never clips. */}
-              <div className="flex w-[clamp(4.5rem,9vw,9rem)] shrink-0 flex-col items-end leading-none">
+              <div className="flex w-[clamp(5.5rem,10.5vw,10.5rem)] shrink-0 flex-col items-end leading-none">
                 <span
-                  className="font-display text-[clamp(1.3rem,2.6vw,2.8rem)] font-black tabular-nums"
+                  className="font-display text-[clamp(1.7rem,3.4vw,3.7rem)] font-black tabular-nums"
                   style={{
                     color: isLeader ? "var(--color-ey-yellow)" : "var(--color-text)",
                     textShadow: isLeader
@@ -145,7 +145,7 @@ export const BarRace = memo(function BarRace({
                   <CountUp value={team.count} aria-label={`${team.name}: ${team.count} votos`} />
                 </span>
                 {team.percentage !== null && (
-                  <span className="text-[clamp(0.7rem,1.1vw,1.05rem)] font-semibold tabular-nums text-text-dim">
+                  <span className="text-[clamp(0.9rem,1.4vw,1.45rem)] font-semibold tabular-nums text-text-dim">
                     {team.percentage}%
                   </span>
                 )}
