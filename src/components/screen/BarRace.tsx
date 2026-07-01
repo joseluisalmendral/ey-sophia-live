@@ -6,6 +6,7 @@ import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { springs } from "@/lib/motion/tokens";
 import { pickTextOn } from "@/lib/utils/contrast";
+import { adaptiveBarWidthPct } from "./chartScale";
 import type { RankedTeam } from "@/lib/types";
 
 /**
@@ -42,7 +43,13 @@ export const BarRace = memo(function BarRace({
   reduced,
   frozen = false,
 }: BarRaceProps) {
-  const leaderCount = teams[0]?.count ?? 0;
+  // Adaptive scale inputs: the leader pins at 100, and the field's real spread
+  // [trailer, leader] is stretched into the visible band (confidence-blended by
+  // total votes) so a tight race READS as tight and a blowout READS as a blowout.
+  const counts = teams.map((t) => t.count);
+  const leaderCount = counts.length ? Math.max(...counts) : 0;
+  const trailerCount = counts.length ? Math.min(...counts) : 0;
+  const totalCount = counts.reduce((s, c) => s + c, 0);
 
   return (
     <ul
@@ -51,9 +58,13 @@ export const BarRace = memo(function BarRace({
     >
       {teams.map((team) => {
         const isLeader = team.rank === 1 && team.count > 0;
-        // Width relative to the leader; min sliver so a team at 0 still reads.
-        const pct =
-          leaderCount > 0 ? Math.max((team.count / leaderCount) * 100, 2.5) : 2.5;
+        // Adaptive width: honest near-empty, dramatic once the room is real.
+        const pct = adaptiveBarWidthPct({
+          count: team.count,
+          leader: leaderCount,
+          trailer: trailerCount,
+          total: totalCount,
+        });
         const fg = pickTextOn(team.color);
 
         return (

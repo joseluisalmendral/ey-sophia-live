@@ -4,6 +4,7 @@ import { memo, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { EChartsOption } from "echarts";
 import { pickTextOn } from "@/lib/utils/contrast";
+import { columnsYAxisMax } from "./chartScale";
 import type { ChartType, RankedTeam } from "@/lib/types";
 
 // Code-split echarts-for-react (pulls in the heavy echarts core). ChartView is
@@ -134,6 +135,11 @@ export const ChartView = memo(function ChartView({
       },
       yAxis: {
         type: "value",
+        min: 0,
+        // Adaptive max with headroom: keeps the tallest bar off the top edge and
+        // gives near-equal bars a legible gap instead of both hugging the ceiling.
+        // null lets ECharts auto-scale the empty grid before any votes land.
+        max: columnsYAxisMax(Math.max(0, ...teams.map((t) => t.count))) ?? undefined,
         minInterval: 1,
         axisLabel: { color: TEXT_DIM, fontSize: 16 },
         splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
