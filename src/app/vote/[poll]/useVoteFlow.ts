@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useLiveTally } from "@/lib/realtime/useLiveTally";
+import { usePollWatch } from "@/lib/realtime/usePollWatch";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { Poll, PollStatus, Team } from "@/lib/types";
 
@@ -100,19 +101,33 @@ export function useVoteFlow(
   alreadyVotedOnReload = false,
 ): VoteFlow {
   const reduced = useReducedMotionPref();
-  const live = useLiveTally(poll.id);
 
-  // Live status wins once realtime is up; fall back to the server snapshot.
-  const status: PollStatus = live.status ?? poll.status;
+  // Seed the action from the reload marker: neutral 'already', never 'voted'.
+  const [action, setAction] = useState<Action>(
+    alreadyVotedOnReload ? "already" : "idle",
+  );
+
+  // FREE-TIER CONNECTION MITIGATION: hold the realtime WS subscription ONLY
+  // while the voter still needs the live tally — i.e. before they have cast a
+  // vote. Once they have acted ('voted' or 'already'/reload marker) they just
+  // watch the big screen, so we DROP the WS connection and switch to a
+  // lightweight status poll (usePollWatch). This keeps sustained realtime
+  // connections at ≈ (voters still deciding) + screen, instead of one per open
+  // tab for the whole event. The reveal still works: usePollWatch fetches the
+  // final ranked results once the poll closes.
+  const hasActed = action === "voted" || action === "already";
+  const live = useLiveTally(poll.id, { enabled: !hasActed });
+  const watch = usePollWatch(poll.id, hasActed);
+
+  // Live status wins once realtime is up; after voting the poll-watch status
+  // takes over; fall back to the server snapshot before either resolves.
+  const status: PollStatus =
+    (hasActed ? watch.status : live.status) ?? poll.status;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // votedTeamId is set ONLY on a fresh 'ok' vote — never on 'already'/reload,
   // because in those cases we do not know the voter's real team.
   const [votedTeamId, setVotedTeamId] = useState<string | null>(null);
-  // Seed the action from the reload marker: neutral 'already', never 'voted'.
-  const [action, setAction] = useState<Action>(
-    alreadyVotedOnReload ? "already" : "idle",
-  );
   const [error, setError] = useState<string | null>(null);
 
   // Displayed phase is derived from live status + the voter's action.
@@ -183,11 +198,20 @@ export function useVoteFlow(
     }
   }, [selectedId, poll.id, reduced]);
 
-  // Resolve the personal rank from the live tally at reveal (fresh 'ok' only).
+  // Resolve the personal rank at reveal (fresh 'ok' only). Before voting the
+  // rank would come from the live tally; after voting it comes from the
+  // poll-watch's one-shot get_results at close. Since the personal reveal only
+  // renders for a fresh vote (which always sets hasActed), watch is the source.
   const myRank = useMemo(() => {
     if (!votedTeamId) return null;
-    return live.teams.find((t) => t.id === votedTeamId)?.rank ?? null;
-  }, [live.teams, votedTeamId]);
+    const source = hasActed ? watch.teams : live.teams;
+    return source.find((t) => t.id === votedTeamId)?.rank ?? null;
+  }, [hasActed, watch.teams, live.teams, votedTeamId]);
+
+  // Total finalists is stable from the server props; fall back to whichever
+  // realtime source has teams (keeps the "de N finalistas" copy correct).
+  const totalTeams =
+    teams.length || (hasActed ? watch.teams.length : live.teams.length);
 
   return {
     status,
@@ -200,7 +224,7 @@ export function useVoteFlow(
     error,
     submit,
     submitting: action === "submitting",
-    closesAt: live.closesAt ?? poll.closesAt,
-    totalTeams: live.teams.length,
+    closesAt: (hasActed ? watch.closesAt : live.closesAt) ?? poll.closesAt,
+    totalTeams,
   };
 }
