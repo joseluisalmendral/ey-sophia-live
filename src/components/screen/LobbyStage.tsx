@@ -8,7 +8,7 @@ import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { EyBeam } from "@/components/brand/EyBeam";
 import { durations, easings } from "@/lib/motion/tokens";
-import { useLobbyRoster, type LobbyMember } from "./usePresenceCount";
+import { useLobbyJoins, type LobbyMember } from "./useLobbyJoins";
 import type { Poll, RankedTeam, Team } from "@/lib/types";
 
 /**
@@ -61,7 +61,7 @@ export const LobbyStage = memo(function LobbyStage({
   opensAt,
   reduced,
 }: LobbyStageProps) {
-  const { count: joined, members } = useLobbyRoster(poll.id);
+  const { count: joined, members } = useLobbyJoins(poll.id);
   const domain = domainHint(voterUrl);
   // A future opens_at drives the count-in; only show it during countdown.
   // Mount-time clock read (lazy state keeps render pure); the stage re-mounts on
@@ -221,7 +221,7 @@ function JoinFeed({
   members: LobbyMember[];
   reduced: boolean;
 }) {
-  const recent = members.filter((m) => m.alias !== null).slice(0, FEED_SIZE);
+  const recent = members.slice(0, FEED_SIZE);
   if (recent.length === 0) return null;
 
   return (
@@ -250,7 +250,7 @@ function JoinFeed({
               aria-hidden
               className="flex h-[1.7em] w-[1.7em] items-center justify-center rounded-full bg-sophia-purple/25 font-display text-[0.85em] font-black text-text"
             >
-              {m.alias?.charAt(0)}
+              {m.alias.charAt(0)}
             </span>
             {m.alias}
           </motion.li>
