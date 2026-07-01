@@ -1,245 +1,253 @@
 # RUNBOOK — EY SophIA Live Voting
 
-Operator guide for **manual testing** and **running the event day-of**.
-Written to be followed top-to-bottom. If you only read one section, read
-**"How the account is configured"** and **"Day-of pre-flight"**.
+Guía del operador para las **pruebas manuales** y para **gestionar el día del evento**.
+Escrita para seguirse de arriba abajo. Si solo vas a leer una sección, lee
+**«Cómo está configurada la cuenta»** y **«Comprobaciones previas del día del evento»**.
 
 ---
 
-## 0. How the account is configured (all owner steps are DONE)
+## 0. Cómo está configurada la cuenta (todos los pasos de propietario están HECHOS)
 
-The owner-only setup is complete. This section documents **how it's configured** so
-you can verify or reproduce it — nothing here is a blocker anymore.
+La configuración exclusiva del propietario está completa. Esta sección documenta **cómo está
+configurada** para que puedas verificarla o reproducirla — aquí ya no hay nada que sea un bloqueo.
 
-### (1) Deployment Protection is DISABLED (the app is public) ✅
-Production is **deployed and PUBLIC (live)** at
+### (1) La Protección de Despliegue está DESACTIVADA (la app es pública) ✅
+Producción está **desplegada y es PÚBLICA (en vivo)** en
 **https://ey-sophia-live-joseluisalmendrals-projects.vercel.app**.
-Deployment Protection (Vercel Authentication / SSO) — the old login wall — has been
-**turned OFF**, so attendees scanning the QR reach the app directly.
-- Confirmed: `GET /` and `GET /vote/DEMO42` both return **200** (no 302 to a Vercel
-  login page).
-- To re-check: `curl -I https://ey-sophia-live-joseluisalmendrals-projects.vercel.app/`
-  → expect `200`.
-- Where the toggle lives (if you ever need it): Vercel Dashboard → project
+La Protección de Despliegue (Vercel Authentication / SSO) — el antiguo muro de login — se ha
+**desactivado**, así que los asistentes que escanean el QR llegan directamente a la app.
+- Confirmado: `GET /` y `GET /vote/DEMO42` devuelven ambos **200** (sin 302 a una página de
+  login de Vercel).
+- Para volver a comprobarlo: `curl -I https://ey-sophia-live-joseluisalmendrals-projects.vercel.app/`
+  → se espera `200`.
+- Dónde está el interruptor (por si alguna vez lo necesitas): Panel de Vercel → proyecto
   **ey-sophia-live** → **Settings → Deployment Protection → Vercel Authentication**.
 
-Notes:
-- The earlier "BLOCKED" deploys were a **git-author authorization** issue: commits
-  authored by a non-team email (`joseluis.fernandez@thepower.education`) are rejected.
-  FIXED — the repo commits as the Vercel account email (`joseluisfunnels@gmail.com`).
-- **Future contributors:** their commit email must be a **Vercel team member** or the
-  deploy will be blocked. Add them under **Vercel → Settings → Members** first.
-- Prod being deployed means the daily **keep-alive cron is ACTIVE** (§5) — the free
-  Supabase project won't pause.
+Notas:
+- Los despliegues anteriores marcados como «BLOCKED» eran un problema de **autorización del autor
+  del commit**: los commits creados con un email que no pertenece al equipo
+  (`joseluis.fernandez@thepower.education`) se rechazan.
+  ARREGLADO — el repositorio hace los commits con el email de la cuenta de Vercel (`joseluisfunnels@gmail.com`).
+- **Futuros colaboradores:** su email de commit debe ser el de un **miembro del equipo de Vercel** o
+  el despliegue quedará bloqueado. Añádelos antes en **Vercel → Settings → Members**.
+- Que producción esté desplegada implica que el **cron diario de keep-alive está ACTIVO** (§5) — el
+  proyecto gratuito de Supabase no se pausará.
 
-### (2) Supabase Auth URLs are configured (admin magic-link works) ✅
-The admin logs in via magic-link, which only works if the Site URL + Redirect URLs
-are allowlisted. This is **done** — magic-link login is confirmed working.
-- Supabase Dashboard → **Authentication → URL Configuration** (for reference):
+### (2) Las URLs de Auth de Supabase están configuradas (el magic-link del admin funciona) ✅
+El admin inicia sesión mediante magic-link, que solo funciona si la Site URL + las Redirect URLs
+están en la lista de permitidos. Esto está **hecho** — el login por magic-link está confirmado y funciona.
+- Panel de Supabase → **Authentication → URL Configuration** (para referencia):
   - **Site URL:** `https://ey-sophia-live-joseluisalmendrals-projects.vercel.app`
-  - **Redirect URLs (both set):**
+  - **Redirect URLs (ambas configuradas):**
     - `https://ey-sophia-live-joseluisalmendrals-projects.vercel.app/**`
-    - `http://localhost:3000/**`   (so local testing magic-links also work)
+    - `http://localhost:3000/**`   (para que los magic-links de las pruebas en local también funcionen)
 
-> If admins ever can't log in, this (Redirect URLs) is the first thing to re-check.
+> Si alguna vez los admins no pueden iniciar sesión, esto (las Redirect URLs) es lo primero que
+> hay que volver a comprobar.
 
 ---
 
-## 1. Run the app locally (for testing)
+## 1. Ejecutar la app en local (para pruebas)
 
 ```bash
-# from the project root
-pnpm install          # first time only
-pnpm build            # must finish CLEAN (it does)
-pnpm start            # serves the REAL production build on http://localhost:3000
+# desde la raíz del proyecto
+pnpm install          # solo la primera vez
+pnpm build            # debe terminar LIMPIO (así es)
+pnpm start            # sirve la build de producción REAL en http://localhost:3000
 ```
-`.env.local` already points at the real production Supabase, so local = real DB +
-real realtime. This is exactly what you'll test.
+`.env.local` ya apunta a la Supabase de producción real, así que local = BD real +
+realtime real. Esto es exactamente lo que vas a probar.
 
-Demo poll for practice: join code **DEMO42** (4 teams). Reset it to draft before a
-clean run (see §6).
-
----
-
-## 2. The happy-path walkthrough (do this end-to-end at least once)
-
-You'll want **two devices**: a laptop (admin + projector) and a phone (voter).
-
-1. **Admin logs in.** Go to `/admin`. If not logged in you're sent to `/admin/login`.
-   Enter an allowlisted admin email → "Enviar enlace" → open the magic link from your
-   inbox → you land on the admin panel.
-2. **Create / open a poll.** Use the demo poll (DEMO42) or create a new one:
-   title, add teams (name + color — the color picker shows a live contrast preview),
-   optionally set an **open duration** (seconds) for an auto-closing timed vote,
-   choose chart type. The poll starts in **Borrador (draft)**.
-3. **Open the projector.** On the laptop (or a second screen/projector), open
-   `/screen/DEMO42`. It shows the **lobby**: a big QR code, the short join code, and
-   the finalist cards at zero. The QR encodes the VOTER url (`/vote/DEMO42`), not the
-   screen url — scan it with the phone to confirm.
-4. **Phones join & the room fills.** Attendees scan the QR → land on `/vote/DEMO42`.
-   While the poll is draft/countdown they see an animated "voting opens soon" state
-   (NOT the vote buttons).
-5. **Open voting.** In the admin Live Control, click the big next-state button
-   (Draft → [Cuenta atrás] → **Abrir votación**). Phones flip to the vote cards
-   **with no refresh, within ~12s** (they poll the status endpoint on a gentle
-   cadence — this is by design; see LIMITS.md). The **projector is instant**. If a
-   duration was set, the projector shows a live countdown.
-6. **Watch the live race — on the big screen.** As phones vote, the **projector**
-   bar-race animates in real time (leader bar glows EY-yellow). Phones intentionally
-   do **not** show the live race — voters watch the big screen. A voter taps a team →
-   **Votar** → gets a confirmation ("Tu voto para [Equipo] está registrado — mirá la
-   pantalla grande"). A second tap from the same phone is rejected (one vote/device).
-7. **Close & reveal.** Click **Cerrar votación y revelar** (confirm-gated). The
-   projector runs the 3-beat reveal: suspense hold → podium (1st center) + crown +
-   confetti → fireworks → settle. Each phone that voted shows **"Tu equipo quedó #N"**.
-
-That's the whole show. Rehearse it once fully before the event.
+Poll de demo para practicar: código de acceso **DEMO42** (4 equipos). Resetéalo a borrador antes de
+una ronda limpia (ver §6).
 
 ---
 
-## 3. Edge cases to eyeball (spot-check these)
+## 2. Recorrido del happy-path (haz esto de principio a fin al menos una vez)
 
-These are all verified in code + automated tests, but eyeball them on real hardware:
+Vas a necesitar **dos dispositivos**: un portátil (admin + proyector) y un móvil (votante).
 
-- **Bad code → clean 404.** Open `/vote/NOPE` and `/screen/NOPE` → branded 404 page,
-  real HTTP 404 (fixed this QA pass). No crash.
-- **Draft poll → no vote buttons.** `/vote/DEMO42` while draft shows "opens soon",
-  never raw cards.
-- **Double vote blocked.** Vote, then reload the phone → you see the "ya votaste"
-  state, not the cards. Vote again from a *different* phone → count goes up.
-- **Zero votes close.** Open then close a poll with NO votes → reveal shows a designed
-  "no votes" state (no crown, no NaN, no crash).
-- **Tie.** Two teams equal top count: default rule crowns a single deterministic
-  winner (first to reach the count). If you set `double_crown`, two co-winners.
-- **Timed auto-close.** Set a short duration (e.g. 20 s), open, walk away — the poll
-  closes itself and reveals even if nobody touches anything (server-authoritative).
-- **Reconnect.** Toggle wifi on the projector briefly → the board must NOT flash to
-  empty; it keeps the last counts and resumes.
-- **Reduced motion.** Turn on "Reduce Motion" on a phone → entrances/confetti collapse
-  to crossfades; everything still works.
-- **Projector legibility.** On the REAL projector at the REAL distance: is the smallest
-  text readable? Do the team colors read distinctly? (Projectors crush mid-tones — this
-  is the one thing automated tests can't check for you.)
+1. **El admin inicia sesión.** Ve a `/admin`. Si no has iniciado sesión, se te envía a `/admin/login`.
+   Introduce un email de admin de la lista de permitidos → «Enviar enlace» → abre el magic link desde
+   tu bandeja de entrada → aterrizas en el panel de admin.
+2. **Crea / abre un poll.** Usa el poll de demo (DEMO42) o crea uno nuevo:
+   título, añade equipos (nombre + color — el selector de color muestra una vista previa de contraste
+   en vivo), opcionalmente fija una **duración de apertura** (segundos) para una votación cronometrada
+   con auto-cierre, y elige el tipo de gráfica. El poll empieza en **Borrador (draft)**.
+3. **Abre el proyector.** En el portátil (o en una segunda pantalla/proyector), abre
+   `/screen/DEMO42`. Muestra el **lobby**: un QR grande, el código de acceso corto, y
+   las tarjetas de los finalistas a cero. El QR codifica la url del VOTANTE (`/vote/DEMO42`), no la
+   url de la pantalla — escanéalo con el móvil para confirmarlo.
+4. **Los móviles se unen y la sala se llena.** Los asistentes escanean el QR → aterrizan en `/vote/DEMO42`.
+   Mientras el poll está en borrador/cuenta atrás ven un estado animado de «la votación abre en breve»
+   (NO los botones de voto).
+5. **Abre la votación.** En el Live Control del admin, pulsa el botón grande de siguiente estado
+   (Borrador → [Cuenta atrás] → **Abrir votación**). Los móviles pasan a las tarjetas de voto
+   **sin recargar, en ~12s** (consultan el endpoint de estado con una cadencia suave — esto es
+   así por diseño; ver LIMITS.md). El **proyector es instantáneo**. Si se fijó una duración, el
+   proyector muestra una cuenta atrás en vivo.
+6. **Observa la carrera en vivo — en la pantalla grande.** A medida que los móviles votan, la carrera
+   de barras del **proyector** se anima en tiempo real (la barra líder brilla en amarillo EY). Los
+   móviles a propósito **no** muestran la carrera en vivo — los votantes miran la pantalla grande. Un
+   votante toca un equipo → **Votar** → recibe una confirmación («Tu voto para [Equipo] está
+   registrado — mirá la pantalla grande»). Un segundo toque desde el mismo móvil se rechaza
+   (un voto por dispositivo).
+7. **Cierra y revela.** Pulsa **Cerrar votación y revelar** (con confirmación previa). El
+   proyector ejecuta la revelación en 3 tiempos: pausa de suspense → podio (1º al centro) + corona +
+   confeti → fuegos artificiales → reposo. Cada móvil que haya votado muestra **«Tu equipo quedó #N»**.
+
+Ese es todo el espectáculo. Ensáyalo una vez completo antes del evento.
 
 ---
 
-## 4. Device / browser checklist
+## 3. Casos límite a revisar a ojo (haz un spot-check de estos)
 
-Test the VOTER flow on each; the PROJECTOR only needs to run on the laptop driving it.
+Todos están verificados en el código + los tests automáticos, pero revísalos a ojo en hardware real:
 
-| Device / browser | What to check | Known caveats |
+- **Código incorrecto → 404 limpio.** Abre `/vote/NOPE` y `/screen/NOPE` → página 404 con marca,
+  HTTP 404 real (arreglado en esta pasada de QA). Sin crash.
+- **Poll en borrador → sin botones de voto.** `/vote/DEMO42` en borrador muestra «abre en breve»,
+  nunca las tarjetas en crudo.
+- **Doble voto bloqueado.** Vota, luego recarga el móvil → ves el estado «ya votaste», no las
+  tarjetas. Vota de nuevo desde un móvil *distinto* → el conteo sube.
+- **Cierre con cero votos.** Abre y luego cierra un poll SIN votos → la revelación muestra un
+  estado de «sin votos» diseñado (sin corona, sin NaN, sin crash).
+- **Empate.** Dos equipos con el mismo conteo máximo: la regla por defecto corona a un único ganador
+  determinista (el primero en alcanzar el conteo). Si fijas `double_crown`, hay dos co-ganadores.
+- **Auto-cierre cronometrado.** Fija una duración corta (p. ej. 20 s), abre, aléjate — el poll se
+  cierra solo y revela aunque nadie toque nada (autoritativo en el servidor).
+- **Reconexión.** Apaga y enciende brevemente el wifi en el proyector → el tablero NO debe parpadear
+  a vacío; mantiene los últimos conteos y se reanuda.
+- **Movimiento reducido.** Activa «Reduce Motion» en un móvil → las entradas/confeti se reducen
+  a fundidos cruzados; todo sigue funcionando.
+- **Legibilidad en el proyector.** En el proyector REAL a la distancia REAL: ¿se lee el texto más
+  pequeño? ¿Se distinguen bien los colores de los equipos? (Los proyectores aplastan los tonos
+  medios — esto es lo único que los tests automáticos no pueden comprobar por ti.)
+
+---
+
+## 4. Checklist de dispositivos / navegadores
+
+Prueba el flujo del VOTANTE en cada uno; el PROYECTOR solo necesita funcionar en el portátil que lo mueve.
+
+| Dispositivo / navegador | Qué comprobar | Salvedades conocidas |
 |---|---|---|
-| **iOS Safari (iPhone)** | scan QR, vote, see confirm + reveal | No vibration (iOS has no `navigator.vibrate` — silently skipped). Audio only after a tap. Private mode: cookies still work (we use cookies, not localStorage) so dedup + reload state survive. |
-| **Android Chrome** | scan QR, vote, feel the haptic buzz on vote | Vibration works here. Everything else identical. |
-| **Chrome / Edge desktop** | full flow + projector | Full support incl. WebGL shader background. |
-| **Firefox desktop** | full flow + projector | Full support; WebGL shader works. |
-| **Safari desktop** | full flow | If WebGL is disabled/old, background falls back to a static cosmic gradient — no error. |
-| **Any device, "Reduce Motion" on** | vote + reveal | Animations become crossfades; confetti/fireworks disabled; still fully usable. |
+| **iOS Safari (iPhone)** | escanear QR, votar, ver confirmación + revelación | Sin vibración (iOS no tiene `navigator.vibrate` — se omite en silencio). El audio solo suena tras un toque. Modo privado: las cookies siguen funcionando (usamos cookies, no localStorage), así que la deduplicación + el estado al recargar sobreviven. |
+| **Android Chrome** | escanear QR, votar, sentir el zumbido háptico al votar | Aquí la vibración funciona. Todo lo demás es idéntico. |
+| **Chrome / Edge escritorio** | flujo completo + proyector | Soporte total incl. fondo con shader WebGL. |
+| **Firefox escritorio** | flujo completo + proyector | Soporte total; el shader WebGL funciona. |
+| **Safari escritorio** | flujo completo | Si WebGL está deshabilitado/anticuado, el fondo cae a un gradiente cósmico estático — sin error. |
+| **Cualquier dispositivo, «Reduce Motion» activado** | votar + revelación | Las animaciones pasan a fundidos cruzados; confeti/fuegos desactivados; sigue siendo totalmente usable. |
 
-**Cookies & https:** the anti-fraud cookie is `Secure`, which requires https. On the
-Vercel prod URL that's automatic. On `http://localhost:3000` browsers make a
-localhost exception, so local testing works too. On any OTHER plain-http host the
-Secure cookie would be dropped and dedup would weaken — always use the https prod URL
-for the real event.
-
----
-
-## 5. Keep-alive (don't let the DB fall asleep)
-
-Free Supabase pauses after **7 days of inactivity**. A paused project makes the app
-error on first load.
-- The daily Vercel cron (`/api/cron/keepalive`, `0 6 * * *`) prevents this. **Prod is
-  deployed, so this cron is ACTIVE** — the 7-day pause is handled automatically.
-- **Belt-and-suspenders, morning of the event:** load the app once ~1 hour before
-  doors. If it was asleep for any reason, the first load wakes it (a few seconds),
-  then it's warm.
+**Cookies y https:** la cookie anti-fraude es `Secure`, lo que requiere https. En la URL de prod de
+Vercel eso es automático. En `http://localhost:3000` los navegadores hacen una excepción para
+localhost, así que las pruebas en local también funcionan. En cualquier OTRO host de http plano la
+cookie Secure se descartaría y la deduplicación se debilitaría — usa siempre la URL de prod con https
+para el evento real.
 
 ---
 
-## 6. Reset the demo poll to a clean state
+## 5. Keep-alive (no dejes que la BD se duerma)
 
-Before a clean rehearsal or the real event, reset DEMO42 to pristine (draft, 0 votes,
-no timestamps). From the project, using the DB password:
+La Supabase gratuita se pausa tras **7 días de inactividad**. Un proyecto pausado hace que la app
+dé error en la primera carga.
+- El cron diario de Vercel (`/api/cron/keepalive`, `0 6 * * *`) lo previene. **Producción está
+  desplegada, así que este cron está ACTIVO** — la pausa de 7 días se gestiona automáticamente.
+- **Por si acaso, la mañana del evento:** carga la app una vez ~1 hora antes de abrir puertas.
+  Si estaba dormida por cualquier motivo, la primera carga la despierta (unos segundos), y luego
+  ya está caliente.
+
+---
+
+## 6. Resetear el poll de demo a un estado limpio
+
+Antes de un ensayo limpio o del evento real, resetea DEMO42 a su estado prístino (borrador, 0 votos,
+sin timestamps). Desde el proyecto, usando la contraseña de la BD:
 
 ```bash
-# quickest: via the Supabase SQL editor or psql
+# lo más rápido: mediante el editor SQL de Supabase o psql
 UPDATE polls SET status='draft', opens_at=NULL, closes_at=NULL
   WHERE join_code='DEMO42';
 DELETE FROM votes WHERE poll_id=(SELECT id FROM polls WHERE join_code='DEMO42');
 UPDATE team_tallies SET count=0
   WHERE poll_id=(SELECT id FROM polls WHERE join_code='DEMO42');
 ```
-(For the real event, create a FRESH poll rather than reusing the demo — cleaner
-history and analytics.)
+(Para el evento real, crea un poll NUEVO en lugar de reutilizar el de demo — historial y analítica
+más limpios.)
 
 ---
 
-## 7. Day-of-event pre-flight checklist
+## 7. Comprobaciones previas del día del evento
 
-Run this ~60 minutes before doors.
+Ejecuta esto ~60 minutos antes de abrir puertas.
 
-- [ ] **Prod is reachable.** Open the prod URL, confirm `/` returns 200 and loads.
-      (Prod is deployed and public — this is just a sanity check. Fallback only if
-      the venue somehow can't reach it: run from a laptop on `pnpm start` on the
-      venue network and confirm phones reach `http://<laptop-ip>:3000`.)
-- [ ] **DB is awake.** Load `/vote/<code>` once; confirm no error / cold-start passed.
-- [ ] **Admin can log in.** Do a real magic-link login now, not at showtime. If it
-      fails → check Supabase Redirect URLs (§0.2).
-- [ ] **Poll created & in draft.** Teams, colors, duration (if timed), chart type set.
-- [ ] **Projector shows the lobby.** QR scannable from the back of the room; join code
-      big and legible; finalist cards visible at zero.
-- [ ] **Scan test.** Scan the on-screen QR with a phone → lands on the right vote page
-      with the right teams.
-- [ ] **One full dry run** on the real network: open → 2–3 test votes from 2 phones →
-      close → reveal. Then **reset** (§6) before the real audience.
-- [ ] **Room size within limits.** See LIMITS.md — free tier is comfortable to
-      several hundred attendees (verified safe to ~300 phones at the 12s cadence).
-      Voters use CDN-cached polling (zero Realtime connections), so there's no
-      Supabase connection cap in play. For a much bigger room, lengthen the poll
-      interval (see LIMITS) — no upgrade needed.
-- [ ] **Wifi sanity.** Venue wifi that phones will use is reachable. (Voters only make
-      plain HTTPS requests — no WebSockets — so WS-blocking guest wifi is NOT a
-      problem for phones. The projector laptop does use Realtime; put it on a network
-      that allows WebSockets. Still worth casting a real test vote on the venue wifi.)
-- [ ] **Reduce-motion path** quickly eyeballed on one phone.
+- [ ] **Producción es accesible.** Abre la URL de prod, confirma que `/` devuelve 200 y carga.
+      (Producción está desplegada y es pública — esto es solo una comprobación de cordura. Solo como
+      fallback si la sede no puede alcanzarla por algún motivo: ejecuta desde un portátil con
+      `pnpm start` en la red de la sede y confirma que los móviles llegan a `http://<ip-del-portátil>:3000`.)
+- [ ] **La BD está despierta.** Carga `/vote/<código>` una vez; confirma que no hay error / que el
+      arranque en frío ya pasó.
+- [ ] **El admin puede iniciar sesión.** Haz un login real por magic-link ahora, no a la hora del
+      show. Si falla → comprueba las Redirect URLs de Supabase (§0.2).
+- [ ] **Poll creado y en borrador.** Equipos, colores, duración (si es cronometrado) y tipo de
+      gráfica configurados.
+- [ ] **El proyector muestra el lobby.** QR escaneable desde el fondo de la sala; código de acceso
+      grande y legible; tarjetas de finalistas visibles a cero.
+- [ ] **Prueba de escaneo.** Escanea el QR de la pantalla con un móvil → aterriza en la página de
+      voto correcta con los equipos correctos.
+- [ ] **Un ensayo completo** en la red real: abrir → 2–3 votos de prueba desde 2 móviles →
+      cerrar → revelar. Luego **resetea** (§6) antes de la audiencia real.
+- [ ] **Tamaño de sala dentro de los límites.** Ver LIMITS.md — el tier gratuito es cómodo hasta
+      varios cientos de asistentes (verificado seguro hasta ~300 móviles con la cadencia de 12s).
+      Los votantes usan polling cacheado por CDN (cero conexiones de Realtime), así que no entra en
+      juego ningún límite de conexiones de Supabase. Para una sala mucho más grande, alarga el
+      intervalo de polling (ver LIMITS) — sin necesidad de upgrade.
+- [ ] **Cordura del wifi.** El wifi de la sede que van a usar los móviles es accesible. (Los votantes
+      solo hacen peticiones HTTPS planas — sin WebSockets — así que un wifi de invitados que bloquee
+      WS NO es un problema para los móviles. El portátil del proyector sí usa Realtime; ponlo en una
+      red que permita WebSockets. Aun así, merece la pena lanzar un voto de prueba real en el wifi
+      de la sede.)
+- [ ] **Ruta de movimiento reducido** revisada rápidamente a ojo en un móvil.
 
 ---
 
-## 8. Troubleshooting
+## 8. Resolución de problemas
 
-| Symptom | Likely cause & fix |
+| Síntoma | Causa probable y solución |
 |---|---|
-| Admin magic-link goes nowhere / errors | Supabase Redirect URLs not set (§0.2). Add both prod `/**` and localhost `/**`. |
-| App errors on first load event morning | DB was paused (7-day sleep). Reload once to wake it. The daily keep-alive cron (§5) normally prevents this. |
-| Phones don't show the live race | Expected — by design. Phones do NOT show the live race; voters watch the big screen. Phones only reflect open/closed (within ~12s) and their personal "#N" at the end. |
-| Phones slow to flip to "open"/"closed" | Expected — phones poll on a gentle ~12s cadence (per-IP-safe, see LIMITS). The projector is instant. Nothing to fix; the presenter cues "vote now" and phones catch up within a cycle. |
-| A specific IP gets HTTP 403 with `x-vercel-mitigated: deny` | Vercel per-IP DDoS mitigation (temporary, per-IP). The shipped gentle cadence is verified NOT to trigger it at room scale — only pathological request floods do. If it happens, it clears on its own; don't hammer retries. For a much larger room, lengthen the poll interval (LIMITS). |
-| Live race not moving on the projector while votes happen | Check the projector is on `/screen/<code>` (not an old tab), and that the poll status is **open**. First status flip after a fresh page can lag 1–2 s (realtime warm-up) — normal. |
-| A voter can't vote ("closed" / "not open") | The poll isn't `open`. Open it from admin Live Control. Timed polls auto-close at the duration — reopen requires a new poll (closed is terminal). |
-| Vote seems to not dedupe | You're on a plain-http (non-localhost) host so the Secure cookie was dropped. Use the https prod URL. |
-| Background is flat (no shader) | WebGL unavailable or Reduce-Motion on → intentional CSS-gradient fallback. Not a bug. |
-| Countdown wrong after phone was locked | Countdown is re-derived from the server `closes_at` on resume — unlock and it corrects itself. |
+| El magic-link del admin no lleva a ninguna parte / da error | Redirect URLs de Supabase sin configurar (§0.2). Añade tanto prod `/**` como localhost `/**`. |
+| La app da error en la primera carga la mañana del evento | La BD estaba pausada (sueño de 7 días). Recarga una vez para despertarla. El cron diario de keep-alive (§5) normalmente lo previene. |
+| Los móviles no muestran la carrera en vivo | Es lo esperado — por diseño. Los móviles NO muestran la carrera en vivo; los votantes miran la pantalla grande. Los móviles solo reflejan abierto/cerrado (en ~12s) y su «#N» personal al final. |
+| Los móviles tardan en pasar a «abierto»/«cerrado» | Es lo esperado — los móviles consultan con una cadencia suave de ~12s (segura por IP, ver LIMITS). El proyector es instantáneo. Nada que arreglar; el presentador da la señal de «votad ahora» y los móviles se ponen al día en un ciclo. |
+| Una IP concreta recibe HTTP 403 con `x-vercel-mitigated: deny` | Mitigación de DDoS por IP de Vercel (temporal, por IP). La cadencia suave enviada está verificada para NO dispararla a escala de sala — solo las inundaciones patológicas de peticiones lo hacen. Si ocurre, se resuelve sola; no machaques con reintentos. Para una sala mucho más grande, alarga el intervalo de polling (LIMITS). |
+| La carrera en vivo no se mueve en el proyector mientras hay votos | Comprueba que el proyector está en `/screen/<código>` (no una pestaña antigua), y que el estado del poll es **abierto**. El primer cambio de estado tras una página recién cargada puede tardar 1–2 s (calentamiento de realtime) — es normal. |
+| Un votante no puede votar («cerrado» / «no abierto») | El poll no está `abierto`. Ábrelo desde el Live Control del admin. Los polls cronometrados se auto-cierran al llegar a la duración — reabrir requiere un poll nuevo (cerrado es terminal). |
+| Parece que el voto no deduplica | Estás en un host de http plano (no localhost), así que la cookie Secure se descartó. Usa la URL de prod con https. |
+| El fondo está plano (sin shader) | WebGL no disponible o Reduce-Motion activado → fallback intencionado a gradiente CSS. No es un bug. |
+| La cuenta atrás está mal después de bloquear el móvil | La cuenta atrás se recalcula a partir del `closes_at` del servidor al reanudar — desbloquea y se corrige sola. |
 
 ---
 
-## 9. What was verified in QA (so you can trust the above)
+## 9. Qué se verificó en QA (para que puedas confiar en lo anterior)
 
-Tested against the REAL prod Supabase with the REAL production build:
-- Smoke: all routes correct (incl. real 404 for bad codes — fixed this pass).
-- Realtime E2E: vote → tally broadcast (absolute count), dedup, open/closed/not-open,
-  countdown `closes_at`. 13/13.
-- Edge: zero-votes, ties (single + double crown), 1/2/12-team podiums, emoji/long/
-  injection team names (stored safe, no XSS), rapid double-submit (exactly 1 vote),
-  cross-poll isolation. All pass.
-- Load (writes): 150 & 200 concurrent votes = 100% success, tallies EXACT,
-  p95 ≈ 570–710 ms, no rate-limits.
-- Load (voter polling, per-IP): 2250 requests at ~25 req/s for 90s from a SINGLE IP =
-  2250× HTTP 200, ZERO 403 / zero `x-vercel-mitigated`. The gentle cadence does not
-  trip Vercel per-IP DDoS mitigation at room scale (~300 phones at 12s).
-- CDN caching verified in prod: `/api/poll/[id]/status` and `/results` return
-  `x-vercel-cache: HIT` and NO `Set-Cookie` (cookie-less → CDN-cacheable).
-- Browser fallbacks (WebGL→CSS, WebAudio no-op, vibrate guard, cookies, no
-  localStorage, reduced-motion) all present.
-- Two bugs found & fixed (cast_vote closed-result semantics; notFound() returning 200).
-- Voter architecture: voters use CDN-cached HTTP polling (`usePollStatus`), zero
-  Realtime connections; only the projector uses Realtime (2 connections).
+Probado contra la Supabase de prod REAL con la build de producción REAL:
+- Smoke: todas las rutas correctas (incl. 404 real para códigos incorrectos — arreglado en esta pasada).
+- Realtime E2E: voto → broadcast del recuento (conteo absoluto), deduplicación, abierto/cerrado/no-abierto,
+  cuenta atrás `closes_at`. 13/13.
+- Edge: cero votos, empates (corona simple + doble), podios de 1/2/12 equipos, nombres de equipo
+  con emoji/largos/de inyección (almacenados de forma segura, sin XSS), doble envío rápido (exactamente 1
+  voto), aislamiento entre polls. Todos pasan.
+- Carga (escrituras): 150 y 200 votos concurrentes = 100% de éxito, recuentos EXACTOS,
+  p95 ≈ 570–710 ms, sin rate-limits.
+- Carga (polling del votante, por IP): 2250 peticiones a ~25 req/s durante 90s desde una ÚNICA IP =
+  2250× HTTP 200, CERO 403 / cero `x-vercel-mitigated`. La cadencia suave no dispara la mitigación de
+  DDoS por IP de Vercel a escala de sala (~300 móviles a 12s).
+- Cacheo de CDN verificado en prod: `/api/poll/[id]/status` y `/results` devuelven
+  `x-vercel-cache: HIT` y NINGÚN `Set-Cookie` (sin cookies → cacheable por CDN).
+- Fallbacks de navegador (WebGL→CSS, WebAudio no-op, guard de vibrate, cookies, sin
+  localStorage, movimiento reducido) todos presentes.
+- Dos bugs encontrados y arreglados (semántica de resultado cerrado en cast_vote; notFound() devolviendo 200).
+- Arquitectura del votante: los votantes usan polling HTTP cacheado por CDN (`usePollStatus`), cero
+  conexiones de Realtime; solo el proyector usa Realtime (2 conexiones).
+</content>
+</invoke>
