@@ -1,8 +1,16 @@
-# LIMITS.md — EY SophIA Live: free-tier limits, connection ceiling & room-size math
+# LIMITS.md — EY SophIA Live: free-tier limits & room-size math
 
 This is the honest capacity picture, measured against the REAL production Supabase
-(project `soiekjltkigbmohtpznq`) with real load tests. Read the **verdict** first,
-then the math if you want the why.
+(project `soiekjltkigbmohtpznq`) and the REAL Vercel prod deployment with real load
+tests. Read the **verdict** first, then the math if you want the why.
+
+> **Architecture note (this is why the old numbers changed).** Voter phones **no
+> longer open a Supabase Realtime WebSocket at all.** They use CDN-cached HTTP
+> polling (`usePollStatus` → `GET /api/poll/[id]/status`). The old "one WS per open
+> phone" connection ceiling is gone for the audience. Only the **projector** still
+> uses Realtime. The binding constraint is no longer Supabase connections — it's the
+> per-IP request rate from the venue's single NAT IP against Vercel's DDoS
+> mitigation, and that has been verified safe at room scale.
 
 ---
 
@@ -10,11 +18,86 @@ then the math if you want the why.
 
 | Question | Answer |
 |---|---|
-| **Safe max room size (people)** | **~180 concurrent open phones** on Supabase free tier, comfortably. Hard ceiling ~198. |
-| **With the post-vote mitigation now shipped** | The ceiling is no longer "open tabs" — it's "people still deciding at the same instant." A room of **300–400** is realistic because voters release their connection seconds after voting. |
-| **Votes/sec capacity** | Not a concern. 200 concurrent vote writes completed at 100% success, p95 ≈ 570–710 ms, tallies EXACT (no lost updates). Votes are NOT connections. |
-| **What breaks first at scale** | Concurrent **Realtime connections** (200 cap), never write throughput or DB size. |
-| **When to upgrade** | If you expect **>180 phones open simultaneously and NOT yet voted**, move to Supabase Pro (500 connections, raise-able). See "Upgrade path". |
+| **Safe max room size (people)** | **Comfortably several hundred attendees on free tier.** Verified safe to ~300 phones at the shipped 12s cadence. For bigger rooms, lengthen the poll interval (see math) — the CDN cache means the origin barely moves regardless. |
+| **Do voter connections gate room size?** | **No.** Voters hold **ZERO** Realtime connections. Only the projector holds Realtime (2). Supabase's 200-connection cap is a non-issue for the audience. |
+| **What breaks first at scale** | **Aggregate polling request-rate from the venue's single NAT IP** against Vercel per-IP DDoS mitigation. Verified NOT tripped by the shipped cadence at ~300 phones. |
+| **Votes/sec capacity** | Not a concern. 200 concurrent vote writes = 100% success, p95 ≈ 570–710 ms, tallies EXACT (no lost updates). Votes are HTTP writes, not connections. |
+| **When to upgrade** | You don't need Supabase Pro for connections anymore. For much larger rooms, the free lever is to **lengthen the poll interval** (req/s = phones ÷ interval), not to pay. |
+
+---
+
+## Voter architecture — CDN-cached HTTP polling (no WebSocket)
+
+Each voter phone polls a cookie-less, CDN-cacheable endpoint instead of holding a
+WebSocket. From the code (verified):
+
+| Client | Realtime connections held |
+|---|---|
+| **Voter phone (before voting)** | **0** — polls `GET /api/poll/[id]/status` on a slow cadence. |
+| **Voter phone (after voting)** | **0** — same poll, slower cadence; one `GET /api/poll/[id]/results` at close for the personal "your team finished #N". |
+| **Projector screen** | **2** — Realtime `poll:<id>` (live tally/status) + `lobby:<id>` (presence count). Unchanged. |
+
+### The polling cadence (deliberately gentle — `src/lib/polling/usePollStatus.ts`)
+- **Base interval:** 12s **before** voting, 20s **after** voting.
+- **Hard floor:** never sooner than 10s, jitter included.
+- **±30% jitter** per tick so a room that loaded together doesn't sync into a herd.
+- **Random initial delay (0..12s)** so the first poll from a room that scans the QR
+  together is staggered, not one synchronized same-IP burst.
+- **Exponential backoff** on fetch error (capped at 30s).
+- **Pauses entirely while the tab is hidden**; fires one immediate tick on return.
+- **Never surfaces an error** — on repeated failures it keeps the last known state
+  and the flow degrades to "watch the big screen."
+
+### The endpoints are CDN-cacheable (verified in prod)
+- `GET /api/poll/[id]/status` and `GET /api/poll/[id]/results` both send
+  `Cache-Control: public, s-maxage=3, stale-while-revalidate=10` and are cookie-less
+  (**no `Set-Cookie`**), so Vercel's CDN serves them.
+- **Verified in prod:** `x-vercel-cache: HIT` and NO `Set-Cookie` on both endpoints.
+- Effect: no matter how many phones poll, the CDN collapses the room to ~1 origin
+  hit per 3s. The origin (and Supabase behind it) is **barely touched**.
+
+---
+
+## The real scaling constraint — per-IP request rate behind venue NAT
+
+All phones at a venue share **one public IP** (the venue NAT). Vercel applies
+**per-IP DDoS mitigation**, so what matters is the aggregate request rate from that
+single IP:
+
+```
+requests_per_second ≈ phones ÷ poll_interval_seconds
+```
+
+At the 12s base cadence: **300 phones ÷ 12s ≈ 25 req/s** from the venue IP.
+
+### Verified safe (real load test)
+A paced load of **2250 requests at ~25 req/s for 90s from a single IP** returned
+**2250× HTTP 200, ZERO 403 / zero `x-vercel-mitigated`.** The gentle cadence does
+**not** trip Vercel's per-IP mitigation at room scale.
+
+> **Context / why the cadence is deliberately slow.** An earlier *pathological* burst
+> of **hundreds of req/s** from one IP DID briefly trip Vercel's per-IP mitigation.
+> That mitigation is **per-IP and temporary**, and normal users are never affected —
+> but it's exactly why the shipped cadence is intentionally slow. Real audience
+> traffic stays well under the threshold.
+
+### Scaling to bigger rooms — lengthen the interval
+Because `req/s = phones ÷ interval`, doubling the interval halves the per-IP rate:
+
+| Phones | Interval | ≈ req/s from venue IP |
+|---|---|---|
+| 300 | 12s (shipped) | ~25 (verified safe) |
+| 600 | 24s | ~25 |
+| 1000 | 30s | ~33 |
+
+The CDN cache (`s-maxage=3`) means lengthening the interval costs the origin/Supabase
+essentially nothing — it only changes how often each phone asks the CDN.
+
+### The trade-off (by design, imperceptible in a guided event)
+Phones learn "voting opened/closed" within **~12s**, not instantly. The **projector
+is instant** (it keeps Realtime). In a presenter-guided event the presenter says
+"vote now" and the phones catch up within a poll cycle — imperceptible. Phones
+intentionally do **not** show the live race; the audience watches the big screen.
 
 ---
 
@@ -22,115 +105,63 @@ then the math if you want the why.
 
 | Resource | Free-tier limit | Our usage / headroom |
 |---|---|---|
-| **Concurrent Realtime connections** | **200** | THE binding constraint. See ceiling math below. |
-| Realtime messages / month | 2,000,000 | 1 broadcast per vote + 1 per status change. A 300-vote event ≈ 300 msgs. Fanned out to N subscribers, each delivery counts — see message math. Still tiny vs 2M. |
+| **Concurrent Realtime connections** | **200** | **No longer a factor for the audience.** Only the projector uses Realtime (2 connections total). Voters use 0. |
+| Realtime messages / month | 2,000,000 | Only the projector subscribes. A whole event is a few hundred messages. Trivial. |
 | Database size | 500 MB | A vote row is ~100 bytes. 1M votes ≈ 100 MB. Non-issue for workshops. |
 | Monthly Active Users (MAU) | 50,000 | Voters are anon (no auth user). Only admins are auth users (a handful). Non-issue. |
-| Egress / bandwidth | 5 GB/mo | Static bundle + small JSON. Non-issue for a single event. |
-| **Project auto-pause** | **after 7 days inactivity** | Mitigated by the Vercel Cron keep-alive (`/api/cron/keepalive`, daily). See caveat below. |
+| Egress / bandwidth | 5 GB/mo | Static bundle + small JSON, most of it served from the CDN cache. Non-issue. |
+| **Project auto-pause** | **after 7 days inactivity** | Handled automatically by the Vercel Cron keep-alive (`/api/cron/keepalive`, daily, now deployed in prod). See caveat below. |
 
-### Project auto-pause — IMPORTANT operational caveat
+### Project auto-pause — operational caveat
 The free project **pauses after 7 days with no activity**, which would make the app
-return errors on event day if it slept. Mitigations in place:
-- `vercel.json` has a daily cron hitting `/api/cron/keepalive` (a trivial authed DB ping).
-- **BUT Vercel Hobby crons run only ONCE PER DAY** and only when the project is
-  deployed on Vercel. Since production is currently NOT deployed (blocked at the
-  account level), the cron is NOT running yet.
-- **Action:** Once Vercel prod is unblocked (see RUNBOOK), the cron keeps it awake.
-  Until then, **manually hit the DB at least once every 7 days** (open the admin, or
-  run any query) — or the project sleeps and the event-day app errors on first load.
-- If unsure the morning of the event: open the app once ~1 hour before. First load
-  after a pause wakes it (a few seconds cold start), then it's fine.
+error on first load if it slept. Status now:
+- `vercel.json` has a daily cron (`0 6 * * *`) hitting `/api/cron/keepalive`
+  (a trivial authed DB ping). **Prod is deployed, so this cron is ACTIVE** and keeps
+  the project awake.
+- Belt-and-suspenders: if unsure the morning of the event, **open the app once ~1
+  hour before**. First load after any pause wakes it (a few seconds cold start), then
+  it's fine.
 
 ---
 
-## The connection ceiling — measured, not guessed
+## Write capacity — measured, not a concern
 
-Each open browser tab that holds a Supabase Realtime WebSocket = **1 connection**
-against the 200 cap. From the code (verified):
+Votes are HTTP writes (`/api/vote` → a single RPC), **not** connections.
 
-| Client | Realtime connections held |
-|---|---|
-| **Voter phone (before voting)** | **1** — the private `poll:<id>` channel (live tally + status) via `useLiveTally`. |
-| **Voter phone (AFTER voting, with mitigation)** | **0** — drops the WS, switches to a light HTTP status poll. |
-| **Projector screen** | **2** — `poll:<id>` (tally/status) + `lobby:<id>` (presence count). |
+- **200 concurrent vote writes = 100% success**, p95 ≈ 570–710 ms.
+- Tallies EXACT (no lost updates), no rate-limits hit.
 
-### Formula
-```
-Without mitigation:  concurrent_connections ≈ N_open_tabs + 2
-With mitigation:     concurrent_connections ≈ N_still_deciding + 2
-```
-Where `N_still_deciding` = people who have the page open but have NOT yet voted at
-that instant. In a real room, that spikes for ~30–60 s after the QR goes up, then
-collapses toward 0 as people vote.
-
-### What this means for room size
-- **Without mitigation:** ~198 phones can be open at once before hitting the cap.
-  A 200-person room where everyone opens the page simultaneously would flirt with
-  the ceiling; a 250+ room would exceed it and late subscribers would fail to
-  connect (they'd fall back to "connecting…", never seeing the live race).
-- **With the shipped mitigation:** the sustained connection count tracks only the
-  "deciding" crowd. Even a 400-person room is fine as long as no more than ~180
-  people are simultaneously open-and-not-yet-voted. Realistically voting is staggered
-  over seconds, so the peak-concurrent-deciding is well under the headcount.
-
-### Recommended max room size
-- **No changes / mitigation off:** cap the room at **~180 phones** for comfort.
-- **Mitigation on (current state):** **300–400 people** is safe for a normal
-  vote-then-watch flow. If you expect a synchronized stampede (everyone scans in the
-  same 5 seconds and stares before voting), keep it under ~180 open-simultaneously
-  or upgrade.
-
-### Message-count math (the 2M/mo limit — not a worry)
-Broadcast fan-out = (messages emitted) × (subscribers). Worst case: 300 votes × 200
-subscribers = 60,000 deliveries for the whole event. Against 2,000,000/month that's
-3%. The mitigation reduces this further (fewer subscribers after voting). **Never
-the binding constraint.**
+Write throughput is never the binding constraint at workshop scale.
 
 ---
 
-## Mitigation shipped (this QA pass)
-
-**Change:** after a voter casts (or is detected already-voted), the voter page
-**unsubscribes from Realtime** and switches to `usePollWatch` — a visibility-aware
-4-second poll of `polls.status` plus a single `get_results` call when the poll
-closes. The personal "your team finished #N" reveal is preserved (it reads the
-final ranked results at close). Verified end-to-end against prod (rank/count exact).
-
-**Effect:** trades a scarce resource (200 WS connections) for an abundant one
-(indexed HTTP reads). Sustained connections drop from "one per open phone for the
-whole event" to "one per phone only until it votes."
-
-**Cost:** a voted phone does 1 tiny indexed SELECT every 4 s while visible (paused
-when the tab is hidden). At 300 voted phones that's ~75 req/s of single-row reads —
-trivial for PostgREST.
-
----
-
-## Vercel free (Hobby) limits — for when prod is deployed
+## Vercel free (Hobby) limits — prod is deployed
 
 | Resource | Hobby limit | Note for this app |
 |---|---|---|
-| Serverless function invocations | Generous (1M+/mo equiv) | `/api/vote` is one invocation per vote. A 300-vote event ≈ 300 invocations. Non-issue. |
-| Function duration | 10 s (Hobby) | Vote route is a single RPC, <1 s. Non-issue. |
-| Cron jobs | **1 run/day, and only on a deployed project** | The keep-alive cron. Fine for keep-alive; can't be used for sub-daily scheduling. Auto-close does NOT depend on it (compute-on-read + pg_cron in the DB handle that). |
-| Bandwidth | 100 GB/mo | Static bundle + JSON. Non-issue for one event. |
-| Concurrent builds / deploys | 1 | Irrelevant on event day. |
+| Serverless function invocations | Generous (1M+/mo equiv) | Most voter polls are **CDN cache hits** (never reach a function). `/api/vote` is one invocation per vote. Non-issue. |
+| Function duration | 10 s (Hobby) | Vote route is a single RPC, <1 s. Status/results are single reads. Non-issue. |
+| Cron jobs | **1 run/day** | The keep-alive cron (`0 6 * * *`). Fine for keep-alive. Auto-close does NOT depend on it (compute-on-read + pg_cron in the DB handle that). |
+| Bandwidth | 100 GB/mo | Static bundle + small JSON, mostly CDN-cached. Non-issue for one event. |
+| **Per-IP DDoS mitigation** | Automatic, per-IP, temporary | The one thing that matters at room scale. Verified NOT tripped by the shipped cadence at ~300 phones. See "The real scaling constraint" above. |
 
 **Note:** the server-authoritative auto-close is handled INSIDE Supabase
-(compute-on-read in `cast_vote` + a `pg_cron` job every 30 s), NOT by a Vercel cron,
-so the once-a-day Hobby cron limit does NOT affect timed polls.
+(compute-on-read in `cast_vote` + a `pg_cron` job), NOT by a Vercel cron, so the
+once-a-day Hobby cron limit does NOT affect timed polls.
 
 ---
 
-## Upgrade path (if the room is bigger than free tier allows)
+## Room size — recommendation
 
-| If you need… | Do this |
-|---|---|
-| **>180 phones open-and-undecided at once** | **Supabase Pro** ($25/mo): 500 concurrent Realtime connections (raise-able on request), no 7-day pause, larger DB. Single biggest lever. |
-| Sub-daily Vercel cron, longer functions | **Vercel Pro** ($20/mo): more cron frequency, 60 s functions, more bandwidth. Only needed if you add features; NOT required for the current app. |
-| Huge one-off event (1000+ concurrent) | Supabase Pro + consider raising the Realtime connection limit via support, and load-test again at the target number before the event. |
+- **Free tier, as shipped:** comfortably **several hundred attendees**. There is no
+  Supabase connection cap in play for voters, and polling is proven safe to **~300
+  phones** at the 12s cadence.
+- **Bigger than that:** **lengthen the poll interval** (`req/s = phones ÷ interval`).
+  This is free and keeps the per-IP rate flat. Supabase Pro is **NOT** needed for
+  connections anymore.
+- **Honest caveat:** a real **projector legibility test** at the real distance and a
+  real **end-to-end dry run** on the venue network are still required before any
+  event — capacity math can't check those for you.
 
-**Bottom line:** on **free tier as shipped (mitigation on)**, plan for **up to
-~300–400 attendees** with confidence. Above that, the one upgrade that matters is
-**Supabase Pro** for the Realtime connection headroom.
+**Bottom line:** on **free tier as shipped**, plan for **several hundred attendees**
+with confidence; scale further by lengthening the poll interval, not by paying.
