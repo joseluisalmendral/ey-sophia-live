@@ -1,55 +1,51 @@
 # RUNBOOK — EY SophIA Live Voting
 
-Operator guide for **manual testing tomorrow** and **running the event day-of**.
+Operator guide for **manual testing** and **running the event day-of**.
 Written to be followed top-to-bottom. If you only read one section, read
-**"Two things only the account owner can do"** and **"Day-of pre-flight"**.
+**"How the account is configured"** and **"Day-of pre-flight"**.
 
 ---
 
-## 0. Two things ONLY the account owner can do (do these first)
+## 0. How the account is configured (all owner steps are DONE)
 
-Two owner-only steps remain. Everything else is DONE (built, tested, deployed READY).
+The owner-only setup is complete. This section documents **how it's configured** so
+you can verify or reproduce it — nothing here is a blocker anymore.
 
-### (1) Disable Deployment Protection (make the app public)  ← THE key step
-Production IS deployed and building/serving fine (state READY) at
+### (1) Deployment Protection is DISABLED (the app is public) ✅
+Production is **deployed and PUBLIC (live)** at
 **https://ey-sophia-live-joseluisalmendrals-projects.vercel.app**.
-BUT every request currently 302-redirects to a **Vercel login wall** because the
-project has **Deployment Protection (Vercel Authentication) turned ON**. Attendees
-scanning the QR would hit a login page. You MUST turn it off for a public event.
-- Vercel Dashboard → project **ey-sophia-live** → **Settings → Deployment Protection**
-  → **Vercel Authentication → Disable** → Save.
-- (I tried to disable it via API but the safety guard blocked that action — it needs
-  you, or explicitly tell me "disable Vercel protection" and I'll do it.)
-- After disabling, `curl -I https://ey-sophia-live-joseluisalmendrals-projects.vercel.app/`
-  should return 200 (not 302 to vercel.com/sso-api).
+Deployment Protection (Vercel Authentication / SSO) — the old login wall — has been
+**turned OFF**, so attendees scanning the QR reach the app directly.
+- Confirmed: `GET /` and `GET /vote/DEMO42` both return **200** (no 302 to a Vercel
+  login page).
+- To re-check: `curl -I https://ey-sophia-live-joseluisalmendrals-projects.vercel.app/`
+  → expect `200`.
+- Where the toggle lives (if you ever need it): Vercel Dashboard → project
+  **ey-sophia-live** → **Settings → Deployment Protection → Vercel Authentication**.
 
 Notes:
-- The earlier "BLOCKED" deploys were a **git-author** issue (commits were authored by
-  `joseluis.fernandez@thepower.education`, which isn't a Vercel team member). FIXED:
-  the repo now commits as the Vercel account email and the latest deploy is READY. To
-  keep your thePower email in history instead, add it to the Vercel team
-  (Settings → Members) and it'll deploy too.
-- Prod being deployed means the daily **keep-alive cron is now active** (§5) — the free
+- The earlier "BLOCKED" deploys were a **git-author authorization** issue: commits
+  authored by a non-team email (`joseluis.fernandez@thepower.education`) are rejected.
+  FIXED — the repo commits as the Vercel account email (`joseluisfunnels@gmail.com`).
+- **Future contributors:** their commit email must be a **Vercel team member** or the
+  deploy will be blocked. Add them under **Vercel → Settings → Members** first.
+- Prod being deployed means the daily **keep-alive cron is ACTIVE** (§5) — the free
   Supabase project won't pause.
 
-### (2) Configure Supabase Auth URLs (for admin magic-link login)
-The admin logs in via magic-link. The link only works if the Site URL + Redirect URLs
-are allowlisted, otherwise the login email link 404s or redirects nowhere.
-- Supabase Dashboard → **Authentication → URL Configuration**
-- **Site URL:** `https://ey-sophia-live-joseluisalmendrals-projects.vercel.app`
-- **Redirect URLs — add BOTH:**
-  - `https://ey-sophia-live-joseluisalmendrals-projects.vercel.app/**`
-  - `http://localhost:3000/**`   (so local testing magic-links also work)
-- Save. Then test: request a magic link, click it, confirm you land on `/admin`.
-- (Alternative: set these via a Supabase Personal Access Token + the Management API,
-  but the dashboard is simpler and less error-prone.)
+### (2) Supabase Auth URLs are configured (admin magic-link works) ✅
+The admin logs in via magic-link, which only works if the Site URL + Redirect URLs
+are allowlisted. This is **done** — magic-link login is confirmed working.
+- Supabase Dashboard → **Authentication → URL Configuration** (for reference):
+  - **Site URL:** `https://ey-sophia-live-joseluisalmendrals-projects.vercel.app`
+  - **Redirect URLs (both set):**
+    - `https://ey-sophia-live-joseluisalmendrals-projects.vercel.app/**`
+    - `http://localhost:3000/**`   (so local testing magic-links also work)
 
-> If admins can't log in on event day, it is almost always (2). Re-check the Redirect
-> URLs first.
+> If admins ever can't log in, this (Redirect URLs) is the first thing to re-check.
 
 ---
 
-## 1. Run the app locally (for testing tomorrow, before prod is unblocked)
+## 1. Run the app locally (for testing)
 
 ```bash
 # from the project root
@@ -84,12 +80,15 @@ You'll want **two devices**: a laptop (admin + projector) and a phone (voter).
    While the poll is draft/countdown they see an animated "voting opens soon" state
    (NOT the vote buttons).
 5. **Open voting.** In the admin Live Control, click the big next-state button
-   (Draft → [Cuenta atrás] → **Abrir votación**). All phones flip to the vote cards
-   **with no refresh**. If a duration was set, the projector shows a live countdown.
-6. **Watch the live race.** As phones vote, the projector bar-race animates in real
-   time (leader bar glows EY-yellow). A voter taps a team → **Votar** → gets a
-   confirmation ("Tu voto para [Equipo] está registrado — mirá la pantalla grande").
-   A second tap from the same phone is rejected (one vote per device).
+   (Draft → [Cuenta atrás] → **Abrir votación**). Phones flip to the vote cards
+   **with no refresh, within ~12s** (they poll the status endpoint on a gentle
+   cadence — this is by design; see LIMITS.md). The **projector is instant**. If a
+   duration was set, the projector shows a live countdown.
+6. **Watch the live race — on the big screen.** As phones vote, the **projector**
+   bar-race animates in real time (leader bar glows EY-yellow). Phones intentionally
+   do **not** show the live race — voters watch the big screen. A voter taps a team →
+   **Votar** → gets a confirmation ("Tu voto para [Equipo] está registrado — mirá la
+   pantalla grande"). A second tap from the same phone is rejected (one vote/device).
 7. **Close & reveal.** Click **Cerrar votación y revelar** (confirm-gated). The
    projector runs the 3-beat reveal: suspense hold → podium (1st center) + crown +
    confetti → fireworks → settle. Each phone that voted shows **"Tu equipo quedó #N"**.
@@ -149,12 +148,11 @@ for the real event.
 
 Free Supabase pauses after **7 days of inactivity**. A paused project makes the app
 error on first load.
-- The daily Vercel cron (`/api/cron/keepalive`) prevents this — **but it only runs
-  once prod is deployed on Vercel** (see §0.1). Until then it is NOT running.
-- **While prod is still blocked:** touch the DB at least once every 7 days (open the
-  admin panel, or just load `/vote/DEMO42`).
-- **Morning of the event:** load the app once ~1 hour before doors. If it was asleep,
-  the first load wakes it (a few seconds), then it's warm.
+- The daily Vercel cron (`/api/cron/keepalive`, `0 6 * * *`) prevents this. **Prod is
+  deployed, so this cron is ACTIVE** — the 7-day pause is handled automatically.
+- **Belt-and-suspenders, morning of the event:** load the app once ~1 hour before
+  doors. If it was asleep for any reason, the first load wakes it (a few seconds),
+  then it's warm.
 
 ---
 
@@ -180,10 +178,10 @@ history and analytics.)
 
 Run this ~60 minutes before doors.
 
-- [ ] **Prod is deployed & reachable.** Open the prod URL, confirm `/` loads.
-      (If prod is still blocked, run the whole event from a laptop on `pnpm start`
-      on the venue network — test that phones on the venue wifi can reach the
-      laptop's `http://<laptop-ip>:3000`. Prefer prod if at all possible.)
+- [ ] **Prod is reachable.** Open the prod URL, confirm `/` returns 200 and loads.
+      (Prod is deployed and public — this is just a sanity check. Fallback only if
+      the venue somehow can't reach it: run from a laptop on `pnpm start` on the
+      venue network and confirm phones reach `http://<laptop-ip>:3000`.)
 - [ ] **DB is awake.** Load `/vote/<code>` once; confirm no error / cold-start passed.
 - [ ] **Admin can log in.** Do a real magic-link login now, not at showtime. If it
       fails → check Supabase Redirect URLs (§0.2).
@@ -195,10 +193,14 @@ Run this ~60 minutes before doors.
 - [ ] **One full dry run** on the real network: open → 2–3 test votes from 2 phones →
       close → reveal. Then **reset** (§6) before the real audience.
 - [ ] **Room size within limits.** See LIMITS.md — free tier is comfortable to
-      ~300–400 attendees with the shipped mitigation. If bigger, upgrade Supabase Pro
-      first (§ LIMITS "Upgrade path").
-- [ ] **Wifi sanity.** Venue wifi that phones will use is reachable and not blocking
-      WebSockets (corporate guest wifi sometimes does — test a real vote on it).
+      several hundred attendees (verified safe to ~300 phones at the 12s cadence).
+      Voters use CDN-cached polling (zero Realtime connections), so there's no
+      Supabase connection cap in play. For a much bigger room, lengthen the poll
+      interval (see LIMITS) — no upgrade needed.
+- [ ] **Wifi sanity.** Venue wifi that phones will use is reachable. (Voters only make
+      plain HTTPS requests — no WebSockets — so WS-blocking guest wifi is NOT a
+      problem for phones. The projector laptop does use Realtime; put it on a network
+      that allows WebSockets. Still worth casting a real test vote on the venue wifi.)
 - [ ] **Reduce-motion path** quickly eyeballed on one phone.
 
 ---
@@ -208,9 +210,11 @@ Run this ~60 minutes before doors.
 | Symptom | Likely cause & fix |
 |---|---|
 | Admin magic-link goes nowhere / errors | Supabase Redirect URLs not set (§0.2). Add both prod `/**` and localhost `/**`. |
-| App errors on first load event morning | DB was paused (7-day sleep). Reload once to wake it; deploy prod so the cron keeps it awake (§5). |
-| Phones show "connecting…" and never see the race | Realtime connection cap hit (>~180 open undecided phones on free tier) OR venue wifi blocks WebSockets. Upgrade Supabase Pro, or move to a network that allows WS. |
-| Live race not moving while votes happen | Check the projector is on `/screen/<code>` (not an old tab), and that the poll status is **open**. First status flip after a fresh page can lag 1–2 s (realtime warm-up) — normal. |
+| App errors on first load event morning | DB was paused (7-day sleep). Reload once to wake it. The daily keep-alive cron (§5) normally prevents this. |
+| Phones don't show the live race | Expected — by design. Phones do NOT show the live race; voters watch the big screen. Phones only reflect open/closed (within ~12s) and their personal "#N" at the end. |
+| Phones slow to flip to "open"/"closed" | Expected — phones poll on a gentle ~12s cadence (per-IP-safe, see LIMITS). The projector is instant. Nothing to fix; the presenter cues "vote now" and phones catch up within a cycle. |
+| A specific IP gets HTTP 403 with `x-vercel-mitigated: deny` | Vercel per-IP DDoS mitigation (temporary, per-IP). The shipped gentle cadence is verified NOT to trigger it at room scale — only pathological request floods do. If it happens, it clears on its own; don't hammer retries. For a much larger room, lengthen the poll interval (LIMITS). |
+| Live race not moving on the projector while votes happen | Check the projector is on `/screen/<code>` (not an old tab), and that the poll status is **open**. First status flip after a fresh page can lag 1–2 s (realtime warm-up) — normal. |
 | A voter can't vote ("closed" / "not open") | The poll isn't `open`. Open it from admin Live Control. Timed polls auto-close at the duration — reopen requires a new poll (closed is terminal). |
 | Vote seems to not dedupe | You're on a plain-http (non-localhost) host so the Secure cookie was dropped. Use the https prod URL. |
 | Background is flat (no shader) | WebGL unavailable or Reduce-Motion on → intentional CSS-gradient fallback. Not a bug. |
@@ -227,9 +231,15 @@ Tested against the REAL prod Supabase with the REAL production build:
 - Edge: zero-votes, ties (single + double crown), 1/2/12-team podiums, emoji/long/
   injection team names (stored safe, no XSS), rapid double-submit (exactly 1 vote),
   cross-poll isolation. All pass.
-- Load: 150 & 200 concurrent votes = 100% success, tallies EXACT, p95 ≈ 570–710 ms,
-  no rate-limits. 50 concurrent realtime subscriptions = all connected.
+- Load (writes): 150 & 200 concurrent votes = 100% success, tallies EXACT,
+  p95 ≈ 570–710 ms, no rate-limits.
+- Load (voter polling, per-IP): 2250 requests at ~25 req/s for 90s from a SINGLE IP =
+  2250× HTTP 200, ZERO 403 / zero `x-vercel-mitigated`. The gentle cadence does not
+  trip Vercel per-IP DDoS mitigation at room scale (~300 phones at 12s).
+- CDN caching verified in prod: `/api/poll/[id]/status` and `/results` return
+  `x-vercel-cache: HIT` and NO `Set-Cookie` (cookie-less → CDN-cacheable).
 - Browser fallbacks (WebGL→CSS, WebAudio no-op, vibrate guard, cookies, no
   localStorage, reduced-motion) all present.
 - Two bugs found & fixed (cast_vote closed-result semantics; notFound() returning 200).
-- One capacity mitigation shipped (voters release their realtime connection after voting).
+- Voter architecture: voters use CDN-cached HTTP polling (`usePollStatus`), zero
+  Realtime connections; only the projector uses Realtime (2 connections).
