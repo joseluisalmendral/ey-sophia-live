@@ -8,6 +8,7 @@ import { CountdownTimer } from "@/components/atoms/CountdownTimer";
 import { QrCode } from "@/components/atoms/QrCode";
 import { EyBeam } from "@/components/brand/EyBeam";
 import { useLiveTally } from "@/lib/realtime/useLiveTally";
+import { useLocalStatusFlip } from "@/lib/polling/useLocalStatusFlip";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import { durations, easings } from "@/lib/motion/tokens";
 import type { Poll, PollStatus, Team } from "@/lib/types";
@@ -42,12 +43,35 @@ export interface ScreenClientProps {
 
 export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
   const reduced = useReducedMotionPref();
-  const live = useLiveTally(poll.id);
+  // Effective status derived from the SSR snapshot ALONE (local flip included):
+  // before the first status broadcast the hook has no status, so this is the
+  // only signal that the poll is already open — it keeps the open-poll resync
+  // backstop running for a screen that mounts mid-vote.
+  const ssrEffectiveStatus = useLocalStatusFlip(
+    poll.status,
+    poll.opensAt,
+    poll.closesAt,
+  );
+  const live = useLiveTally(poll.id, {
+    assumeOpen: ssrEffectiveStatus === "open",
+  });
 
   // Live status wins once realtime is up; fall back to the server snapshot.
-  const status: PollStatus = live.status ?? poll.status;
-  const opensAt = live.opensAt ?? poll.opensAt;
-  const closesAt = live.closesAt ?? poll.closesAt;
+  const baseStatus: PollStatus = live.status ?? poll.status;
+  // Once a status broadcast has arrived, its opens_at/closes_at are
+  // authoritative INCLUDING null: after a relaunch the server clears both, and
+  // falling back to the stale SSR snapshot would let the local flip re-derive
+  // open/closed from the previous run's deadlines. The SSR snapshot is only
+  // trusted before the first broadcast.
+  const opensAt = live.status !== null ? live.opensAt : poll.opensAt;
+  const closesAt = live.status !== null ? live.closesAt : poll.closesAt;
+
+  // LOCAL FLIP (same as the voter's): when a count-in is configured, derive
+  // `open` CLIENT-SIDE the instant opens_at passes instead of waiting for the
+  // status broadcast round-trip. countdown → live then lands on the projector
+  // at the exact same wall-clock moment the phones flip to the vote cards.
+  // Forward-only; the realtime `status` broadcast remains the authority.
+  const status = useLocalStatusFlip(baseStatus, opensAt, closesAt);
   const showNames = poll.showLegend ? SHOW_NAMES_DEFAULT : false;
 
   // Graceful guard: a misconfigured poll (no teams) must never render a broken

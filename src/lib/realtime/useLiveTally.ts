@@ -27,7 +27,9 @@ import type {
  * Resilience contract:
  *  - Incoming tally updates are BATCHED to ~120ms cadence (one flush) so a burst
  *    of votes animates as a single smooth FLIP step, not a flicker storm.
- *  - Broadcasts carry ABSOLUTE counts, so a dropped WS frame can never desync.
+ *  - Broadcasts carry ABSOLUTE counts merged with "highest wins" (counts are
+ *    monotonic within a run), so no race or reordering can regress the board;
+ *    a dropped frame is healed by the periodic open-poll resync.
  *  - On a connection gap we NEVER flash the board to empty: the last known
  *    counts are retained and `connectionState` flips to 'reconnecting'.
  *  - Reconnect uses exponential backoff WITH JITTER to avoid thundering-herd
@@ -56,6 +58,10 @@ interface TeamMeta {
 }
 
 const BATCH_MS = 120;
+// Backstop resync cadence while the poll is OPEN: even if a tally broadcast is
+// silently dropped (degraded wifi, throttled tab) no vote stays unpainted for
+// longer than this.
+const OPEN_RESYNC_MS = 30_000;
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 // Percentages stay hidden until the room is meaningful (no "67%" at 3 votes).
@@ -69,6 +75,14 @@ export interface UseLiveTallyOptions {
    * Defaults to true.
    */
   enabled?: boolean;
+  /**
+   * External "the poll is open" signal used ONLY before the first status
+   * broadcast (status === null): a screen that mounts mid-vote never receives
+   * a status event, so without this the open-poll resync backstop would not
+   * run. Once a broadcast status is known it is the sole authority again.
+   * Defaults to false.
+   */
+  assumeOpen?: boolean;
 }
 
 export interface UseLiveTallyResult {
@@ -132,6 +146,7 @@ export function useLiveTally(
   options?: UseLiveTallyOptions,
 ): UseLiveTallyResult {
   const enabled = options?.enabled ?? true;
+  const assumeOpen = options?.assumeOpen ?? false;
   const supabase = useMemo(() => createClient(), []);
 
   const [metas, setMetas] = useState<Map<string, TeamMeta>>(new Map());
@@ -146,10 +161,11 @@ export function useLiveTally(
   // Mutable refs that must not trigger re-subscription.
   const channelRef = useRef<RealtimeChannel | null>(null);
   const pendingCounts = useRef<Map<string, number>>(new Map());
-  // Per-team receive time of the last tally broadcast — the snapshot-vs-broadcast
-  // race guard: a resync snapshot never overwrites a broadcast that arrived after
-  // the snapshot read started (both are absolute; the newer one wins).
-  const lastBroadcastAt = useRef<Map<string, number>>(new Map());
+  // Run epoch: bumped on every legitimate reset boundary (status -> draft, i.e.
+  // a relaunch). Any snapshot that STARTED before the bump is from the previous
+  // run and is discarded on arrival, so a slow in-flight read can never
+  // resurrect the previous run's counts after the reset.
+  const runEpoch = useRef(0);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempts = useRef(0);
@@ -164,7 +180,9 @@ export function useLiveTally(
       setCounts((prev) => {
         const next = new Map(prev);
         for (const [teamId, count] of pendingCounts.current) {
-          next.set(teamId, count);
+          // Monotonic within a run: counts are absolute and only grow, so max()
+          // makes a late/stale frame harmless instead of a regression.
+          next.set(teamId, Math.max(next.get(teamId) ?? 0, count));
         }
         return next;
       });
@@ -180,19 +198,32 @@ export function useLiveTally(
 
   /**
    * Authoritative resync: fetch the absolute snapshot via `get_results` and
-   * MERGE it into state (never a blanking replace). Per team, a broadcast that
-   * arrived AFTER the snapshot read started wins — both carry absolute counts,
-   * so "latest wins" keeps the board monotonic under the snapshot/broadcast race.
-   * Runs on mount AND after every SUBSCRIBED transition (see subscribe effect):
-   * broadcasts emitted during a connection gap — or between the initial read and
-   * the first SUBSCRIBED — are otherwise lost forever (undercounted board).
+   * MERGE it into state with max() per team (never a blanking replace).
+   *
+   * Within a run counts are absolute and MONOTONIC (votes only insert), so
+   * "highest wins" is always correct and makes every race harmless by
+   * construction: overlapping snapshots resolving out of order, a snapshot
+   * racing a broadcast, or a stale queued flush can each only be a no-op,
+   * never a regression. (The previous "latest wins + lastBroadcastAt" guard
+   * could regress when two snapshots overlapped: the older read applying last
+   * pinned the board short until the next event.)
+   *
+   * The only legitimate DECREASE is a relaunch reset — that path goes through
+   * the `status: draft` handler, which bumps `runEpoch` and clears state
+   * explicitly; any snapshot started before the bump is discarded here.
+   *
+   * Runs on mount, after every SUBSCRIBED transition, on status events, on
+   * visibilitychange, and on the OPEN_RESYNC_MS backstop while open.
    */
   const refreshSnapshot = useCallback(async () => {
-    const startedAt = Date.now();
+    const epochAtStart = runEpoch.current;
     const { data, error } = await supabase.rpc("get_results", {
       p_poll_id: pollId,
     });
     if (pollIdRef.current !== pollId) return;
+    // A reset happened while this read was in flight: the data belongs to the
+    // previous run — applying it would resurrect pre-relaunch counts.
+    if (runEpoch.current !== epochAtStart) return;
     if (error || !Array.isArray(data)) return;
     const rows = data as GetResultsRow[];
     const mMap = new Map<string, TeamMeta>();
@@ -209,13 +240,7 @@ export function useLiveTally(
     setCounts((prev) => {
       const next = new Map(prev);
       for (const r of rows) {
-        const broadcastAt = lastBroadcastAt.current.get(r.team_id) ?? 0;
-        // A fresher broadcast (received after this read started) wins.
-        if (broadcastAt > startedAt) continue;
-        next.set(r.team_id, r.count ?? 0);
-        // Drop any STALE queued broadcast so the next flush cannot undo the
-        // newer snapshot for this team.
-        pendingCounts.current.delete(r.team_id);
+        next.set(r.team_id, Math.max(next.get(r.team_id) ?? 0, r.count ?? 0));
       }
       return next;
     });
@@ -232,9 +257,12 @@ export function useLiveTally(
     (evt: RealtimeEvent) => {
       // Wire shape is snake_case (DB triggers emit it verbatim — engram #926).
       if (evt.type === "tally") {
-        // Absolute value — latest wins; batched to the flush cadence.
-        pendingCounts.current.set(evt.team_id, evt.count);
-        lastBroadcastAt.current.set(evt.team_id, Date.now());
+        // Absolute value — highest wins (monotonic within a run); batched to
+        // the flush cadence.
+        pendingCounts.current.set(
+          evt.team_id,
+          Math.max(pendingCounts.current.get(evt.team_id) ?? 0, evt.count),
+        );
         scheduleFlush();
       } else if (evt.type === "status") {
         setStatus(evt.status);
@@ -243,12 +271,23 @@ export function useLiveTally(
         // (open) appear on the flip even though the initial snapshot had none.
         if (evt.opens_at !== undefined) setOpensAt(evt.opens_at ?? null);
         if (evt.closes_at !== undefined) setClosesAt(evt.closes_at ?? null);
-        // A status flip may also mean the counts changed WITHOUT tally
-        // broadcasts: relaunch_poll resets team_tallies via a direct UPDATE and
-        // only the closed->draft status broadcast fires. Resync the absolute
-        // snapshot so an already-subscribed screen never keeps the previous
-        // run's counts (refreshSnapshot merges with the lastBroadcastAt guard,
-        // so a racing fresher broadcast still wins).
+        // Relaunch (relaunch_poll: closed -> draft) is the ONE legitimate
+        // decrease: team_tallies reset via a direct UPDATE with no tally
+        // broadcasts. Reset explicitly here — bump the run epoch (discards any
+        // in-flight snapshot of the previous run), drop queued frames, and
+        // zero the board. No tally broadcast can legitimately arrive while the
+        // poll is in draft/countdown (cast_vote rejects), so this cannot race
+        // with real votes of the new run.
+        // `countdown` is also a pre-vote boundary (counts are 0 by contract),
+        // so it doubles as the reset if the screen missed the draft event
+        // while reconnecting during a relaunch.
+        if (evt.status === "draft" || evt.status === "countdown") {
+          runEpoch.current++;
+          pendingCounts.current.clear();
+          setCounts(new Map());
+        }
+        // Every status flip may also mean counts changed without broadcasts —
+        // resync the absolute snapshot (max-merge, so it can never regress).
         void refreshSnapshotRef.current();
       }
     },
@@ -371,6 +410,23 @@ export function useLiveTally(
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [enabled]);
+
+  // Backstop resync while voting is live: realtime broadcast is best-effort,
+  // so a silently dropped frame (venue wifi, throttled tab) would otherwise
+  // leave the board short until the NEXT event. A cheap periodic get_results
+  // (max-merge, never regresses) bounds that staleness to OPEN_RESYNC_MS.
+  // The broadcast status gates it once known; before the first broadcast the
+  // caller's `assumeOpen` signal (derived from its effective status) keeps the
+  // backstop running for a client that mounted mid-vote and never got a flip.
+  useEffect(() => {
+    const effectivelyOpen =
+      status === "open" || (status === null && assumeOpen);
+    if (!enabled || !effectivelyOpen) return;
+    const interval = setInterval(() => {
+      void refreshSnapshotRef.current();
+    }, OPEN_RESYNC_MS);
+    return () => clearInterval(interval);
+  }, [enabled, status, assumeOpen]);
 
   const teams = useMemo(() => rankAndOrder(metas, counts), [metas, counts]);
 
