@@ -41,6 +41,13 @@ export interface RevealStageProps {
   teams: RankedTeam[];
   tieRule: TieRule;
   reduced: boolean;
+  /**
+   * True once the initial absolute tally (get_results) has resolved. The
+   * choreography does NOT start until then: a screen that mounts on an already
+   * closed poll would otherwise run the reveal against an empty tally (silent
+   * finale + a false "Sin votos esta vez" podium while real votes are in flight).
+   */
+  ready: boolean;
 }
 
 function wait(ms: number) {
@@ -53,9 +60,21 @@ function wait(ms: number) {
  * and the WebAudio winner sting. Returns the current beat plus the mute state
  * and toggle. Consumers become pure presentation over `beat` + `muted`.
  */
-function useRevealChoreography(outcome: RevealOutcome, reduced: boolean) {
+function useRevealChoreography(
+  outcome: RevealOutcome,
+  reduced: boolean,
+  ready: boolean,
+) {
   const [beat, setBeat] = useState<Beat>("suspense");
   const [scope, animate] = useAnimate();
+
+  // useLatest: the choreography effect reads the outcome at FIRE time (after the
+  // suspense beat), never from a mount-time closure — live.teams seeds async, so
+  // the mount-time outcome is usually the empty zero-votes snapshot.
+  const outcomeRef = useRef(outcome);
+  useEffect(() => {
+    outcomeRef.current = outcome;
+  }, [outcome]);
 
   // Audio sting: attempted best-effort at the crown/confetti landing beat.
   const [muted, setMuted] = useState(false);
@@ -68,6 +87,9 @@ function useRevealChoreography(outcome: RevealOutcome, reduced: boolean) {
   const stingRef = useRef<WinnerStingHandle | null>(null);
 
   useEffect(() => {
+    // Gate the whole choreography on the initial tally being seeded: the beats
+    // and timings stay exactly as designed, they just start from real data.
+    if (!ready) return;
     let cancelled = false;
     let stopFireworks: (() => void) | null = null;
     const suspenseMs = reduced ? 700 : durations.suspense * 1000;
@@ -80,7 +102,10 @@ function useRevealChoreography(outcome: RevealOutcome, reduced: boolean) {
       if (cancelled) return;
       setBeat("podium");
 
-      if (!reduced && !outcome.zeroVotes && outcome.winners.length > 0) {
+      // Fire-time outcome (not the mount-time closure): decides the celebration
+      // from the real final tally.
+      const finalOutcome = outcomeRef.current;
+      if (!reduced && !finalOutcome.zeroVotes && finalOutcome.winners.length > 0) {
         // Confetti edge-burst at podium landing (high zIndex, reduced-safe).
         await wait(900);
         if (cancelled) return;
@@ -103,8 +128,9 @@ function useRevealChoreography(outcome: RevealOutcome, reduced: boolean) {
       stingRef.current?.stop();
       stingRef.current = null;
     };
+    // Runs once when `ready` flips true (or immediately if already true on mount).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
 
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
@@ -121,9 +147,13 @@ function useRevealChoreography(outcome: RevealOutcome, reduced: boolean) {
   return { beat, scope, muted, toggleMute };
 }
 
-export function RevealStage({ teams, tieRule, reduced }: RevealStageProps) {
+export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps) {
   const outcome = resolveReveal(teams, tieRule);
-  const { beat, scope, muted, toggleMute } = useRevealChoreography(outcome, reduced);
+  const { beat, scope, muted, toggleMute } = useRevealChoreography(
+    outcome,
+    reduced,
+    ready,
+  );
 
   return (
     <div ref={scope} className="relative h-full w-full" style={{ opacity: 0 }}>

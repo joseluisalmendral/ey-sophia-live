@@ -146,6 +146,10 @@ export function useLiveTally(
   // Mutable refs that must not trigger re-subscription.
   const channelRef = useRef<RealtimeChannel | null>(null);
   const pendingCounts = useRef<Map<string, number>>(new Map());
+  // Per-team receive time of the last tally broadcast — the snapshot-vs-broadcast
+  // race guard: a resync snapshot never overwrites a broadcast that arrived after
+  // the snapshot read started (both are absolute; the newer one wins).
+  const lastBroadcastAt = useRef<Map<string, number>>(new Map());
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempts = useRef(0);
@@ -168,12 +172,69 @@ export function useLiveTally(
     }, BATCH_MS);
   }, []);
 
+  // Guard against a stale in-flight snapshot applying after a pollId switch.
+  const pollIdRef = useRef(pollId);
+  useEffect(() => {
+    pollIdRef.current = pollId;
+  }, [pollId]);
+
+  /**
+   * Authoritative resync: fetch the absolute snapshot via `get_results` and
+   * MERGE it into state (never a blanking replace). Per team, a broadcast that
+   * arrived AFTER the snapshot read started wins — both carry absolute counts,
+   * so "latest wins" keeps the board monotonic under the snapshot/broadcast race.
+   * Runs on mount AND after every SUBSCRIBED transition (see subscribe effect):
+   * broadcasts emitted during a connection gap — or between the initial read and
+   * the first SUBSCRIBED — are otherwise lost forever (undercounted board).
+   */
+  const refreshSnapshot = useCallback(async () => {
+    const startedAt = Date.now();
+    const { data, error } = await supabase.rpc("get_results", {
+      p_poll_id: pollId,
+    });
+    if (pollIdRef.current !== pollId) return;
+    if (error || !Array.isArray(data)) return;
+    const rows = data as GetResultsRow[];
+    const mMap = new Map<string, TeamMeta>();
+    for (const r of rows) {
+      mMap.set(r.team_id, {
+        id: r.team_id,
+        pollId,
+        name: r.name,
+        color: r.color,
+        position: r.team_position,
+      });
+    }
+    setMetas(mMap);
+    setCounts((prev) => {
+      const next = new Map(prev);
+      for (const r of rows) {
+        const broadcastAt = lastBroadcastAt.current.get(r.team_id) ?? 0;
+        // A fresher broadcast (received after this read started) wins.
+        if (broadcastAt > startedAt) continue;
+        next.set(r.team_id, r.count ?? 0);
+        // Drop any STALE queued broadcast so the next flush cannot undo the
+        // newer snapshot for this team.
+        pendingCounts.current.delete(r.team_id);
+      }
+      return next;
+    });
+  }, [pollId, supabase]);
+
+  // useLatest mirror so the effects below (and the status handler) can trigger
+  // resyncs without coupling to refreshSnapshot's render identity.
+  const refreshSnapshotRef = useRef(refreshSnapshot);
+  useEffect(() => {
+    refreshSnapshotRef.current = refreshSnapshot;
+  }, [refreshSnapshot]);
+
   const handleEvent = useCallback(
     (evt: RealtimeEvent) => {
       // Wire shape is snake_case (DB triggers emit it verbatim — engram #926).
       if (evt.type === "tally") {
         // Absolute value — latest wins; batched to the flush cadence.
         pendingCounts.current.set(evt.team_id, evt.count);
+        lastBroadcastAt.current.set(evt.team_id, Date.now());
         scheduleFlush();
       } else if (evt.type === "status") {
         setStatus(evt.status);
@@ -182,6 +243,13 @@ export function useLiveTally(
         // (open) appear on the flip even though the initial snapshot had none.
         if (evt.opens_at !== undefined) setOpensAt(evt.opens_at ?? null);
         if (evt.closes_at !== undefined) setClosesAt(evt.closes_at ?? null);
+        // A status flip may also mean the counts changed WITHOUT tally
+        // broadcasts: relaunch_poll resets team_tallies via a direct UPDATE and
+        // only the closed->draft status broadcast fires. Resync the absolute
+        // snapshot so an already-subscribed screen never keeps the previous
+        // run's counts (refreshSnapshot merges with the lastBroadcastAt guard,
+        // so a racing fresher broadcast still wins).
+        void refreshSnapshotRef.current();
       }
     },
     [scheduleFlush],
@@ -201,28 +269,10 @@ export function useLiveTally(
     if (!enabled) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.rpc("get_results", {
-        p_poll_id: pollId,
-      });
-      if (cancelled) return;
-      if (!error && Array.isArray(data)) {
-        const rows = data as GetResultsRow[];
-        const mMap = new Map<string, TeamMeta>();
-        const cMap = new Map<string, number>();
-        for (const r of rows) {
-          mMap.set(r.team_id, {
-            id: r.team_id,
-            pollId,
-            name: r.name,
-            color: r.color,
-            position: r.team_position,
-          });
-          cMap.set(r.team_id, r.count ?? 0);
-        }
-        setMetas(mMap);
-        setCounts(cMap);
-      }
-      setReady(true);
+      await refreshSnapshotRef.current();
+      // Ready = the initial read RESOLVED (success or empty) — consumers gate
+      // "no votes" states on it, so it must flip even on an RPC error.
+      if (!cancelled) setReady(true);
     })();
     return () => {
       cancelled = true;
@@ -263,6 +313,10 @@ export function useLiveTally(
           if (subStatus === "SUBSCRIBED") {
             reconnectAttempts.current = 0;
             setConnectionState("live");
+            // Authoritative resync on EVERY (re)join: votes broadcast during the
+            // gap (initial-read→SUBSCRIBED, or a reconnect window) never replay,
+            // so the absolute snapshot is the only way to catch up.
+            void refreshSnapshotRef.current();
           } else if (
             subStatus === "CHANNEL_ERROR" ||
             subStatus === "TIMED_OUT" ||
@@ -304,6 +358,19 @@ export function useLiveTally(
       }
     };
   }, [pollId, supabase, enabled]);
+
+  // Cheap correctness net: when the tab returns to the foreground (browsers
+  // throttle/park hidden tabs and their sockets), resync the absolute snapshot
+  // so any tally missed while hidden is recovered without waiting for the next
+  // broadcast. Never blanks the board (refreshSnapshot merges).
+  useEffect(() => {
+    if (!enabled || typeof document === "undefined") return;
+    const onVisibility = () => {
+      if (!document.hidden) void refreshSnapshotRef.current();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [enabled]);
 
   const teams = useMemo(() => rankAndOrder(metas, counts), [metas, counts]);
 

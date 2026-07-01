@@ -114,6 +114,12 @@ export interface VoteFlow {
   opensAt: string | null;
   closesAt: string | null;
   totalTeams: number;
+  /**
+   * True when THIS session's submit bounced with 'closed' (the poll closed just
+   * before the vote landed). Lets the closed view tell the honest story instead
+   * of the generic "you were late" copy.
+   */
+  justMissed: boolean;
 }
 
 /**
@@ -135,22 +141,34 @@ export function useVoteFlow(
 
   // A voter who has acted (voted or already/reload marker) no longer needs the
   // fast "open flip" cadence — they only await close. usePollStatus slows to the
-  // AFTER-vote cadence and keeps polling until the poll is closed.
+  // AFTER-vote cadence. Polling does NOT stop at close: a relaunch flips the
+  // poll back to draft with no reload, so the phone keeps a slow closed-cadence
+  // watch to return to the lobby on its own.
   const hasActed = action === "voted" || action === "already";
-  const poller = usePollStatus(poll.id, { hasActed });
+  const poller = usePollStatus(poll.id, { hasActed, stopWhenClosed: false });
 
   // Polled status wins once it resolves; fall back to the server snapshot before
-  // the first successful poll.
+  // the first successful poll. Once the poller is ready its timestamps are
+  // authoritative INCLUDING null: after a relaunch the server clears
+  // opens_at/closes_at, and falling back to the stale SSR snapshot would let the
+  // local flip re-derive "closed" from the previous run's deadlines.
   const polledStatus: PollStatus = poller.status ?? poll.status;
-  const opensAt = poller.opensAt ?? poll.opensAt;
-  const closesAt = poller.closesAt ?? poll.closesAt;
+  const opensAt = poller.ready ? poller.opensAt : poll.opensAt;
+  const closesAt = poller.ready ? poller.closesAt : poll.closesAt;
+
+  // The server rejected THIS session's submit with 'closed': the poll is closed
+  // no matter what the (CDN-cached, possibly stale) polled status still says.
+  // Flip locally right away so the voter never keeps seeing vote buttons; the
+  // next poll reconciles the same answer.
+  const [closedOnSubmit, setClosedOnSubmit] = useState(false);
 
   // LOCAL FLIP: derive the EFFECTIVE status from the server timestamps so a
   // configured count-in flips lobby → cards at opens_at with no wait for the next
   // poll (instant + synchronized with the projector). We only ever advance the
   // state machine forward (draft/countdown → open → closed); we never roll it
   // back locally — a later poll remains the authority for corrections.
-  const status = useLocalStatusFlip(polledStatus, opensAt, closesAt);
+  const flippedStatus = useLocalStatusFlip(polledStatus, opensAt, closesAt);
+  const status: PollStatus = closedOnSubmit ? "closed" : flippedStatus;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // votedTeamId is set ONLY on a fresh 'ok' vote — never on 'already'/reload,
@@ -162,6 +180,29 @@ export function useVoteFlow(
   // voter has a known team (fresh 'ok' vote). Drives the personal "#N" reveal.
   const [rankedResults, setRankedResults] = useState<ResultsRow[]>([]);
   const resultsFetched = useRef(false);
+
+  // RELAUNCH RESET: when the POLLED status rolls back to a pre-open state
+  // (closed/open -> draft/countdown), the admin relaunched the poll. Clear the
+  // whole per-run vote state so derivePhase returns "lobby" and the phone walks
+  // itself back to the waiting room of the new run. Keyed off polledStatus (the
+  // server authority), not the effective status: the local flip only advances
+  // forward and must not mask the rollback.
+  const prevPolledStatus = useRef<PollStatus>(polledStatus);
+  useEffect(() => {
+    const prev = prevPolledStatus.current;
+    prevPolledStatus.current = polledStatus;
+    const rolledBack =
+      (polledStatus === "draft" || polledStatus === "countdown") &&
+      (prev === "closed" || prev === "open");
+    if (!rolledBack) return;
+    setAction("idle");
+    setClosedOnSubmit(false);
+    setSelectedId(null);
+    setVotedTeamId(null);
+    setError(null);
+    setRankedResults([]);
+    resultsFetched.current = false;
+  }, [polledStatus]);
 
   // Displayed phase is derived from polled status + the voter's action.
   const phase = derivePhase(status, action);
@@ -220,6 +261,7 @@ export function useVoteFlow(
         // Neutral: we do NOT know their real team, so no votedTeamId/rank.
         setAction("already");
       } else if (result === "not_open" || result === "closed") {
+        if (result === "closed") setClosedOnSubmit(true);
         setAction("rejected");
       } else {
         setError("No se pudo registrar el voto. Inténtalo de nuevo.");
@@ -296,6 +338,7 @@ export function useVoteFlow(
     opensAt,
     closesAt,
     totalTeams,
+    justMissed: closedOnSubmit,
   };
 }
 

@@ -31,6 +31,11 @@ export const runtime = "nodejs";
 // ~1 origin hit / 3s across the whole room; stale served up to 10s while
 // revalidating so a burst never stampedes the origin.
 const CACHE_CONTROL = "public, s-maxage=3, stale-while-revalidate=10";
+// MANUAL-CLOSE polls (open with no closes_at) can flip to closed at any moment
+// and voters have NO local close flip to lean on, so the CDN window shrinks:
+// otherwise a phone can keep showing vote buttons for up to s-maxage+swr seconds
+// after the admin closes, and its vote bounces with 'closed'.
+const CACHE_CONTROL_OPEN_MANUAL = "public, s-maxage=1, stale-while-revalidate=2";
 
 interface StatusRow {
   status: PollStatus;
@@ -61,12 +66,17 @@ export async function GET(
     );
   }
 
+  const cacheControl =
+    data.status === "open" && data.closes_at === null
+      ? CACHE_CONTROL_OPEN_MANUAL
+      : CACHE_CONTROL;
+
   return NextResponse.json(
     {
       status: data.status,
       opensAt: data.opens_at,
       closesAt: data.closes_at,
     },
-    { headers: { "Cache-Control": CACHE_CONTROL } },
+    { headers: { "Cache-Control": cacheControl } },
   );
 }

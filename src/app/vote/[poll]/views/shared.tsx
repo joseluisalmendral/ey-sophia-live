@@ -23,6 +23,9 @@ export const COPY = {
     "Espera a que se abra la votación. Cuando el presentador la abra, aquí aparecerán las opciones para votar.",
   closedTitle: "La votación ya cerró",
   closedSub: "Esta vez no llegaste a tiempo, pero mira la pantalla grande.",
+  closedJustMissedTitle: "La votación se cerró justo antes de tu voto",
+  closedJustMissedSub:
+    "Por muy poco no llegó a contar. Gracias por participar: el resultado está a punto de salir.",
   confirmKicker: "¡Voto registrado!",
   confirmYour: "Tu voto por",
   confirmIn: "está dentro",

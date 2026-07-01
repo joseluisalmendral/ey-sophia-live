@@ -50,8 +50,21 @@ import type { PollStatus } from "@/lib/types";
 const BASE_INTERVAL_WAITING_MS = 4000;
 /** Cadence once OPEN but not yet voted: back off, only the close flip remains. */
 const BASE_INTERVAL_OPEN_MS = 8000;
+/**
+ * Cadence when OPEN with NO closes_at (manual admin close). There is no local
+ * closes_at flip to lean on, so polling is the ONLY way this voter learns the
+ * poll closed — poll faster to shrink the "buttons still up after close" window.
+ * Still well above the 3s floor and CDN-cached, so origin load stays flat.
+ */
+const BASE_INTERVAL_OPEN_MANUAL_MS = 4000;
 /** Slowest cadence after voting: they only await close/reveal. */
 const BASE_INTERVAL_AFTER_MS = 20000;
+/**
+ * Cadence once CLOSED when the caller keeps polling (`stopWhenClosed: false`).
+ * A closed poll only changes if the admin relaunches it (closed -> draft), so a
+ * slow watch is enough for the phone to return to the lobby on its own.
+ */
+const BASE_INTERVAL_CLOSED_MS = 20000;
 /** Hard floor — a scheduled tick is never sooner than this, jitter included. */
 const MIN_INTERVAL_MS = 3000;
 /** ±30% jitter to desync the room. */
@@ -118,6 +131,9 @@ export function usePollStatus(
   const hasActedRef = useRef(hasActed);
   const stopWhenClosedRef = useRef(stopWhenClosed);
   const statusRef = useRef<PollStatus | null>(null);
+  // Last known closesAt, read inside the loop to pick the OPEN cadence (manual
+  // close vs timed close) without restarting the polling effect.
+  const closesAtRef = useRef<string | null>(null);
   useEffect(() => {
     hasActedRef.current = hasActed;
   }, [hasActed]);
@@ -158,12 +174,20 @@ export function usePollStatus(
         return jittered(backoff);
       }
       // Status-aware cadence: fast while waiting for the open flip, back off once
-      // open (only the close flip remains), slowest after the voter has acted.
+      // open (only the close flip remains), slowest after the voter has acted or
+      // once the poll is closed (only a relaunch can change it).
       let base: number;
-      if (hasActedRef.current) {
+      if (statusRef.current === "closed") {
+        base = BASE_INTERVAL_CLOSED_MS;
+      } else if (hasActedRef.current) {
         base = BASE_INTERVAL_AFTER_MS;
       } else if (statusRef.current === "open") {
-        base = BASE_INTERVAL_OPEN_MS;
+        // Manual-close polls (no closes_at) rely on polling alone to learn the
+        // close, so they keep a faster cadence than timed polls.
+        base =
+          closesAtRef.current === null
+            ? BASE_INTERVAL_OPEN_MANUAL_MS
+            : BASE_INTERVAL_OPEN_MS;
       } else {
         base = BASE_INTERVAL_WAITING_MS;
       }
@@ -194,6 +218,7 @@ export function usePollStatus(
         // Success: reset backoff, commit the last known state.
         errorStreak = 0;
         statusRef.current = data.status;
+        closesAtRef.current = data.closesAt;
         setStatus(data.status);
         setOpensAt(data.opensAt);
         setClosesAt(data.closesAt);
