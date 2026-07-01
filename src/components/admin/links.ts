@@ -14,3 +14,8 @@ export function voteUrl(joinCode: string): string {
 export function screenUrl(joinCode: string): string {
   return `${siteUrl()}/screen/${joinCode}`;
 }
+
+/** Stable technician-channel URL (/tv/[slug]); the admin assigns the poll. */
+export function tvUrl(slug: string): string {
+  return `${siteUrl()}/tv/${slug}`;
+}

@@ -7,10 +7,14 @@ import { createSecretClient } from "@/lib/supabase/server";
  *
  * Body: { pollId: string, teamId: string }
  *
- * Device identity is an ephemeral, per-poll, HMAC-signed httpOnly cookie
- * `vt_<pollId>`. The token is httpOnly on purpose: JS can never read it, so it
- * can't be copied/forged client-side. The cookie's ONLY purpose is delivering
- * the requested service (vote once) => strictly-necessary, consent-exempt.
+ * Device identity is an ephemeral, per-poll-RUN, HMAC-signed httpOnly cookie
+ * `vt_<pollId>_r<runSeq>`. The token is httpOnly on purpose: JS can never read
+ * it, so it can't be copied/forged client-side. The cookie's ONLY purpose is
+ * delivering the requested service (vote once) => strictly-necessary,
+ * consent-exempt. The run sequence is read SERVER-SIDE from polls.run_seq
+ * (never trusted from the body), so relaunching a poll (run_seq bump) instantly
+ * re-enables voting for every device: old-run cookies simply stop matching and
+ * expire on their own.
  *
  * Flow:
  *  1. Read & verify the signed cookie. If missing/invalid, mint a fresh random
@@ -96,7 +100,26 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const secret = getSecret();
-  const cookieName = `${COOKIE_PREFIX}${pollId}`;
+
+  // Resolve the poll's current run server-side (secret client, RLS-exempt).
+  // The run scopes the dedup cookie name; a relaunch bumps run_seq and thereby
+  // invalidates every previous-run cookie without any migration.
+  const supabase = createSecretClient();
+  const { data: pollRow, error: pollRowError } = await supabase
+    .from("polls")
+    .select("run_seq")
+    .eq("id", pollId)
+    .maybeSingle<{ run_seq: number }>();
+
+  if (pollRowError) {
+    return jsonNoStore({ error: "vote_failed" }, { status: 502 });
+  }
+  if (!pollRow) {
+    return jsonNoStore({ error: "poll_not_found" }, { status: 404 });
+  }
+
+  const runSeq = pollRow.run_seq;
+  const cookieName = `${COOKIE_PREFIX}${pollId}_r${runSeq}`;
 
   // Parse cookies from the request header (Route Handler, no next/headers needed).
   const cookieHeader = request.headers.get("cookie") ?? "";
@@ -118,7 +141,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // Cast the vote. DB is law: UNIQUE(poll_id, voter_token) blocks doubles.
-  const supabase = createSecretClient();
   const { data, error } = await supabase.rpc("cast_vote", {
     p_poll_id: pollId,
     p_team_id: teamId,
@@ -148,13 +170,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // On a confirmed vote, drop a READABLE (non-httpOnly) marker scoped to /vote
   // so the vote page's server component can render the "already voted" view on
-  // reload. This is NOT a security wall — the signed httpOnly `vt_<pollId>`
-  // cookie above remains the only anti-fraud guard. The marker carries no team
-  // identity (neutral signal only) and is path-scoped to /vote (the dedup
-  // cookie's /api/vote path never reaches the page).
+  // reload. This is NOT a security wall — the signed httpOnly run-scoped cookie
+  // above remains the only anti-fraud guard. The marker carries no team
+  // identity (neutral signal only), is path-scoped to /vote (the dedup
+  // cookie's /api/vote path never reaches the page), and is run-scoped too so a
+  // relaunch renders the fresh voting cards instead of "already voted".
   if (result === "ok") {
     res.cookies.set({
-      name: `voted_${pollId}`,
+      name: `voted_${pollId}_r${runSeq}`,
       value: "1",
       httpOnly: false,
       secure: true,

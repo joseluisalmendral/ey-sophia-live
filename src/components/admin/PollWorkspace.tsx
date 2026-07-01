@@ -3,8 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PollConfigForm, type PollConfigInitial } from "./PollConfigForm";
+import { PollLinksPanel } from "./PollLinksPanel";
+import { ProjectToChannelButton } from "./ProjectToChannelButton";
 import { LiveControlPanel } from "./LiveControlPanel";
+import { RunHistoryPanel } from "./RunHistoryPanel";
 import { StatusBadge } from "./StatusBadge";
+import type { PollRun } from "@/app/admin/(panel)/poll-data";
 import type { PollStatus } from "@/lib/types";
 
 /**
@@ -19,7 +23,9 @@ export function PollWorkspace({
   joinCode,
   hasCountdown,
   configInitial,
+  runs,
   initialTab,
+  channel = null,
 }: {
   pollId: string;
   title: string;
@@ -27,9 +33,13 @@ export function PollWorkspace({
   joinCode: string;
   hasCountdown: boolean;
   configInitial: PollConfigInitial;
-  initialTab: "config" | "live";
+  /** Archived launches (poll_runs), newest first — the "Historial" tab. */
+  runs: PollRun[];
+  initialTab: "config" | "live" | "history";
+  /** Technician channel state (null when the channel row is missing). */
+  channel?: { slug: string; pollId: string | null } | null;
 }) {
-  const [tab, setTab] = useState<"config" | "live">(initialTab);
+  const [tab, setTab] = useState<"config" | "live" | "history">(initialTab);
 
   const tabCls = (active: boolean) =>
     [
@@ -74,6 +84,13 @@ export function PollWorkspace({
         >
           Control en vivo
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("history")}
+          className={tabCls(tab === "history")}
+        >
+          Historial
+        </button>
         <Link href={`/admin/${pollId}/analytics`} className={tabCls(false)}>
           Analíticas
         </Link>
@@ -85,7 +102,19 @@ export function PollWorkspace({
         NOT tear down LiveControlPanel's realtime subscription. Only the active
         tab subscribes to realtime, via the `enabled` prop below.
       */}
-      <div className={tab === "config" ? undefined : "hidden"}>
+      <div
+        className={
+          tab === "config" ? "flex flex-col gap-6" : "hidden"
+        }
+      >
+        <PollLinksPanel joinCode={joinCode} />
+        {channel && (
+          <ProjectToChannelButton
+            pollId={pollId}
+            slug={channel.slug}
+            assignedPollId={channel.pollId}
+          />
+        )}
         <PollConfigForm initial={configInitial} />
       </div>
       <div className={tab === "live" ? undefined : "hidden"}>
@@ -99,6 +128,9 @@ export function PollWorkspace({
           }
           enabled={tab === "live"}
         />
+      </div>
+      <div className={tab === "history" ? undefined : "hidden"}>
+        <RunHistoryPanel pollTitle={title} runs={runs} />
       </div>
     </div>
   );

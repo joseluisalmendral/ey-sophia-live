@@ -99,6 +99,87 @@ export async function getTeams(pollId: string): Promise<Team[]> {
   );
 }
 
+/** One team's archived result inside a poll_run snapshot. */
+export interface PollRunResult {
+  teamId: string;
+  name: string;
+  color: string;
+  position: number;
+  count: number;
+}
+
+/** An archived launch of a poll (created by relaunch_poll). */
+export interface PollRun {
+  id: string;
+  seq: number;
+  label: string | null;
+  startedAt: string | null;
+  endedAt: string;
+  totalVotes: number;
+  results: PollRunResult[];
+}
+
+interface PollRunRow {
+  id: string;
+  seq: number;
+  label: string | null;
+  started_at: string | null;
+  ended_at: string;
+  total_votes: number;
+  results: {
+    team_id: string;
+    name: string;
+    color: string;
+    position: number;
+    count: number;
+  }[];
+}
+
+/** Archived runs for a poll, newest first. RLS: admin-only. */
+export async function listRuns(pollId: string): Promise<PollRun[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("poll_runs")
+    .select("id, seq, label, started_at, ended_at, total_votes, results")
+    .eq("poll_id", pollId)
+    .order("seq", { ascending: false });
+  return ((data ?? []) as PollRunRow[]).map((r) => ({
+    id: r.id,
+    seq: r.seq,
+    label: r.label,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
+    totalVotes: r.total_votes,
+    results: (r.results ?? []).map((t) => ({
+      teamId: t.team_id,
+      name: t.name,
+      color: t.color,
+      position: t.position,
+      count: t.count,
+    })),
+  }));
+}
+
+/** A stable projector channel (/tv/[slug]) and its current assignment. */
+export interface ScreenChannel {
+  slug: string;
+  pollId: string | null;
+  updatedAt: string;
+}
+
+/** Read one screen channel (public SELECT via RLS). Null when missing. */
+export async function getChannel(slug: string): Promise<ScreenChannel | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("screen_channels")
+    .select("slug, poll_id, updated_at")
+    .eq("slug", slug)
+    .maybeSingle<{ slug: string; poll_id: string | null; updated_at: string }>();
+  return data
+    ? { slug: data.slug, pollId: data.poll_id, updatedAt: data.updated_at }
+    : null;
+}
+
 export async function listAdmins(): Promise<string[]> {
   const supabase = await createClient();
   const { data } = await supabase

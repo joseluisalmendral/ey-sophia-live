@@ -32,6 +32,7 @@ interface PollRow {
   tie_rule: Poll["tieRule"];
   join_code: string;
   created_at: string;
+  run_seq: number;
 }
 
 interface TeamRow {
@@ -91,7 +92,7 @@ export default async function VotePage({
   const { data: pollData, error: pollErr } = await supabase
     .from("polls")
     .select(
-      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, tie_rule, join_code, created_at",
+      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, tie_rule, join_code, created_at, run_seq",
     )
     .eq(column, value)
     .maybeSingle<PollRow>();
@@ -118,8 +119,11 @@ export default async function VotePage({
   // present, seed the client so a reload shows the neutral "Ya votaste" view
   // (or the neutral closed view when the poll is closed) instead of the cards.
   // Neutral only: this marker carries NO team, so we never claim a specific vote.
+  // Run-scoped (voted_<id>_r<seq>): after a relaunch the poll's run_seq bumps,
+  // old markers stop matching, and every device can vote again immediately.
   const cookieStore = await cookies();
-  const alreadyVotedOnReload = cookieStore.get(`voted_${poll.id}`)?.value === "1";
+  const alreadyVotedOnReload =
+    cookieStore.get(`voted_${poll.id}_r${pollData.run_seq}`)?.value === "1";
 
   return (
     <VoteClient

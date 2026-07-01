@@ -8,7 +8,7 @@ import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { StatusBadge } from "./StatusBadge";
 import { CopyButton } from "./CopyButton";
 import { voteUrl, screenUrl } from "./links";
-import { changeStatus } from "@/app/admin/(panel)/poll-actions";
+import { changeStatus, relaunchPoll } from "@/app/admin/(panel)/poll-actions";
 import type { PollStatus } from "@/lib/types";
 
 /**
@@ -73,6 +73,7 @@ export function LiveControlPanel({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmRelaunch, setConfirmRelaunch] = useState(false);
 
   // Live mirror of what the room sees (subscribes to poll:<id> when enabled).
   const { teams, status: liveStatus, connectionState } = useLiveTally(pollId, {
@@ -90,11 +91,37 @@ export function LiveControlPanel({
   const blockedForTeams = Boolean(startsVoting) && !teamsValid;
 
   function go(to: PollStatus) {
+    // Anti double-click: the button disables on `pending`, but a fast second
+    // click can land BEFORE React re-renders the disabled state. Bail out
+    // explicitly so the RPC is never fired twice (defense in depth on top of
+    // the now-idempotent set_poll_status).
+    if (pending) return;
     setError(null);
     startTransition(async () => {
       const res = await changeStatus(pollId, to);
       if (!res.ok) setError(res.error ?? "Error");
       else router.refresh();
+    });
+  }
+
+  // Archive the closed results as a run and reset the poll to a clean draft.
+  // The RPC requires status='closed' under a row lock, so a stale second click
+  // fails cleanly ('poll_not_closed') without double-archiving.
+  function relaunch() {
+    // Same pre-render double-click guard as go().
+    if (pending) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await relaunchPoll(pollId);
+      if (!res.ok) {
+        setError(
+          res.error === "poll_not_closed"
+            ? "La votación ya no está cerrada; no hay nada que relanzar."
+            : (res.error ?? "Error"),
+        );
+      }
+      setConfirmRelaunch(false);
+      router.refresh();
     });
   }
 
@@ -190,9 +217,46 @@ export function LiveControlPanel({
               </button>
             )
           ) : (
-            <p className="rounded-lg bg-surface px-4 py-3 text-center text-small text-text-dim">
-              Votación cerrada. El resultado está en pantalla.
-            </p>
+            <div className="flex flex-col gap-3">
+              <p className="rounded-lg bg-surface px-4 py-3 text-center text-small text-text-dim">
+                Votación cerrada. El resultado está en pantalla.
+              </p>
+              {confirmRelaunch ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-ey-yellow/40 bg-ey-yellow/5 p-4">
+                  <p className="text-small text-text">
+                    ¿Relanzar la votación? Los resultados se guardarán en el
+                    historial y la votación volverá a borrador con 0 votos.
+                    Todo el mundo podrá votar de nuevo.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={relaunch}
+                      className="inline-flex h-10 items-center rounded-lg bg-ey-yellow px-5 font-display font-bold text-ey-confident transition-opacity hover:opacity-90 disabled:opacity-50"
+                    >
+                      {pending ? "Relanzando…" : "Sí, archivar y relanzar"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setConfirmRelaunch(false)}
+                      className="inline-flex h-10 items-center rounded-lg border border-white/15 px-4 text-small text-text-dim hover:text-text disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmRelaunch(true)}
+                  className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-ey-yellow/50 font-display text-body font-bold text-ey-yellow transition-colors hover:bg-ey-yellow/10"
+                >
+                  Relanzar votación
+                </button>
+              )}
+            </div>
           )}
         </div>
 

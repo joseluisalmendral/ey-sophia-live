@@ -200,6 +200,82 @@ export async function deletePoll(pollId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+/**
+ * Archive the current results of a CLOSED poll as a poll_run and reset it to a
+ * clean draft (0 votes, run_seq+1). The RPC locks the poll row and requires
+ * status='closed', so a double click fails cleanly on the second call
+ * ('poll_not_closed') instead of double-archiving.
+ */
+export async function relaunchPoll(pollId: string): Promise<ActionResult> {
+  const g = await guard();
+  if (g) return { ok: false, error: g };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("relaunch_poll", { p_poll_id: pollId });
+  if (error) {
+    const msg = error.message.includes("poll_not_closed")
+      ? "poll_not_closed"
+      : error.message;
+    return { ok: false, error: msg };
+  }
+  revalidatePath("/admin");
+  revalidatePath(`/admin/${pollId}`);
+  return { ok: true };
+}
+
+/** Rename an archived run's label (RLS: admin-only, label column only). */
+export async function renameRun(
+  runId: string,
+  label: string,
+): Promise<ActionResult> {
+  const g = await guard();
+  if (g) return { ok: false, error: g };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("poll_runs")
+    .update({ label: label.trim() || null })
+    .eq("id", runId)
+    .select("poll_id")
+    .maybeSingle<{ poll_id: string }>();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "run_not_found" };
+  revalidatePath(`/admin/${data.poll_id}`);
+  return { ok: true, pollId: data.poll_id };
+}
+
+/** Matches the DB CHECK on screen_channels.slug (lowercase kebab-case). */
+const CHANNEL_SLUG_RE = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
+
+/**
+ * Assign a poll to a technician channel (/tv/[slug]) — or clear it with null.
+ * RLS ("screen_channels admin update", is_admin()) is the real wall; the
+ * projector detects the change via /api/channel/[slug] and refreshes itself.
+ */
+export async function assignChannel(
+  slug: string,
+  pollId: string | null,
+): Promise<ActionResult> {
+  const g = await guard();
+  if (g) return { ok: false, error: g };
+  if (!CHANNEL_SLUG_RE.test(slug)) return { ok: false, error: "invalid_slug" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("screen_channels")
+    .update({ poll_id: pollId })
+    .eq("slug", slug)
+    .select("slug")
+    .maybeSingle<{ slug: string }>();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "channel_not_found" };
+
+  revalidatePath("/admin");
+  // Also revalidate the whole panel layout so the /admin/[poll] workspaces do
+  // not keep a stale channel assignment in other sessions.
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
 export async function changeStatus(
   pollId: string,
   status: PollStatus,

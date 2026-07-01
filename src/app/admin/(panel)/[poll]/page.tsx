@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getPoll, getTeams } from "../poll-data";
+import { getChannel, getPoll, getTeams, listRuns } from "../poll-data";
 import { PollWorkspace } from "@/components/admin/PollWorkspace";
 import type { PollConfigInitial } from "@/components/admin/PollConfigForm";
 
@@ -26,7 +26,11 @@ export default async function PollWorkspacePage({
   const poll = await getPoll(pollId);
   if (!poll) notFound();
 
-  const teams = await getTeams(pollId);
+  const [teams, runs, channel] = await Promise.all([
+    getTeams(pollId),
+    listRuns(pollId),
+    getChannel("directo"),
+  ]);
 
   const configInitial: PollConfigInitial = {
     id: poll.id,
@@ -51,7 +55,13 @@ export default async function PollWorkspacePage({
       joinCode={poll.joinCode}
       hasCountdown={poll.countdownSeconds != null && poll.countdownSeconds > 0}
       configInitial={configInitial}
-      initialTab={tab === "live" ? "live" : "config"}
+      runs={runs}
+      channel={
+        channel ? { slug: channel.slug, pollId: channel.pollId } : null
+      }
+      initialTab={
+        tab === "live" ? "live" : tab === "history" ? "history" : "config"
+      }
     />
   );
 }

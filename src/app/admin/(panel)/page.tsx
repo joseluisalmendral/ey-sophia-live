@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { listPolls } from "./poll-data";
+import { getChannel, listPolls } from "./poll-data";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PollRowActions } from "@/components/admin/PollRowActions";
+import { ChannelControlPanel } from "@/components/admin/ChannelControlPanel";
+
+/** The default technician channel seeded by the screen_channels migration. */
+const DEFAULT_CHANNEL_SLUG = "directo";
 
 /**
  * Poll list — /admin
@@ -27,10 +31,25 @@ function formatDate(iso: string): string {
 }
 
 export default async function AdminPollsPage() {
-  const polls = await listPolls();
+  const [polls, channel] = await Promise.all([
+    listPolls(),
+    getChannel(DEFAULT_CHANNEL_SLUG),
+  ]);
 
   return (
     <div>
+      {channel && (
+        <ChannelControlPanel
+          slug={channel.slug}
+          assignedPollId={channel.pollId}
+          polls={polls.map((p) => ({
+            id: p.id,
+            title: p.title,
+            joinCode: p.joinCode,
+            status: p.status,
+          }))}
+        />
+      )}
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-h1 font-extrabold text-text">
