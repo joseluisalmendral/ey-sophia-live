@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { SophiaBanner } from "@/components/brand/SophiaBanner";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
@@ -18,6 +19,7 @@ export function VotingView({
   selectedId,
   onSelect,
   reduced,
+  opensAt,
   closesAt,
 }: {
   poll: Poll;
@@ -26,6 +28,7 @@ export function VotingView({
   selectedId: string | null;
   onSelect: (id: string) => void;
   reduced: boolean;
+  opensAt: string | null;
   closesAt: string | null;
 }) {
   const isLobby = phase === "lobby";
@@ -54,7 +57,7 @@ export function VotingView({
       </motion.div>
 
       {isLobby ? (
-        <LobbyTeaser poll={poll} teams={teams} reduced={reduced} />
+        <LobbyWaiting poll={poll} opensAt={opensAt} reduced={reduced} />
       ) : (
         <>
           <div className="mb-3 mt-7 flex items-center justify-between">
@@ -133,65 +136,101 @@ export function VotingView({
   );
 }
 
-function LobbyTeaser({
+/**
+ * LobbyWaiting — the voter's PRE-OPEN state.
+ *
+ * DELIBERATELY does NOT render the team options. Showing the teams before the
+ * poll opens made voters think they could already pick (confusing) — the whole
+ * point of this screen is to make it unmistakable that voting has NOT started
+ * yet and they must WAIT. So: a lock/wait cue, a clear message, and (when a
+ * count-in is configured) a live "abre en MM:SS" so they know how long. The
+ * option cards appear the instant the poll opens (the flow flips locally at
+ * opensAt), which makes the transition feel like a real "start".
+ */
+function LobbyWaiting({
   poll,
-  teams,
+  opensAt,
   reduced,
 }: {
   poll: Poll;
-  teams: Team[];
+  opensAt: string | null;
   reduced: boolean;
 }) {
+  const isCountdown = poll.status === "countdown";
+
   return (
-    <div className="mt-8 flex flex-col items-center gap-6 text-center">
+    <div className="mt-10 flex flex-1 flex-col items-center justify-center gap-7 text-center">
+      {/* Wait cue: a soft pulsing lock so it reads as "not yet", not "broken". */}
       <motion.div
-        animate={reduced ? undefined : { opacity: [0.6, 1, 0.6] }}
+        aria-hidden
+        animate={reduced ? undefined : { scale: [1, 1.06, 1], opacity: [0.85, 1, 0.85] }}
         transition={
           reduced
             ? undefined
             : { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
         }
-        className="flex flex-col items-center gap-2"
+        className="flex h-24 w-24 items-center justify-center rounded-full border border-ey-yellow/25 bg-ey-yellow/5 text-5xl"
       >
+        ⏳
+      </motion.div>
+
+      <div className="flex flex-col items-center gap-2">
         <span className="text-micro uppercase tracking-[0.3em] text-ey-yellow">
-          {poll.status === "countdown" ? "Preparados…" : "En breve"}
+          {isCountdown ? "Preparados…" : "En breve"}
         </span>
         <h2 className="font-display text-h1 font-extrabold text-text">
           {COPY.lobbyTitle}
         </h2>
         <p className="max-w-xs text-balance text-small leading-relaxed text-text-dim">
-          {COPY.lobbySub}
+          {COPY.lobbyWaitHint}
         </p>
-      </motion.div>
+      </div>
 
-      {/* Finalists teased at zero — anticipation, never a dead "no data". */}
-      <ul className="flex w-full flex-col gap-2.5">
-        {teams.map((team, i) => (
-          <motion.li
-            key={team.id}
-            initial={reduced ? { opacity: 0 } : { opacity: 0, x: -16 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{
-              delay: reduced ? 0 : 0.15 + i * 0.08,
-              duration: durations.base,
-              ease: easings.standard,
-            }}
-            className="flex items-center gap-3 rounded-lg border border-white/8 bg-surface-raised/60 px-4 py-3"
-          >
-            <TeamColorChip
-              color={team.color}
-              label={team.name.charAt(0).toUpperCase()}
-              size={32}
-            />
-            <span className="flex-1 text-left font-display text-body font-semibold text-text">
-              {team.name}
-            </span>
-            <span className="tabular-nums text-h3 font-extrabold text-text-dim">
-              0
-            </span>
-          </motion.li>
-        ))}
-      </ul>
+      {/* Live count-in to opens_at when configured, so the wait has a horizon. */}
+      <OpensInCountdown opensAt={opensAt} />
+    </div>
+  );
+}
+
+/**
+ * OpensInCountdown — small "Abre en MM:SS" derived purely from the server
+ * `opensAt` (re-derived each tick, never accumulated). Returns null when there
+ * is no future open moment to count toward.
+ */
+function OpensInCountdown({ opensAt }: { opensAt: string | null }) {
+  const [ms, setMs] = useState<number>(() =>
+    opensAt ? Math.max(0, new Date(opensAt).getTime() - Date.now()) : 0,
+  );
+
+  useEffect(() => {
+    if (!opensAt) return;
+    const tick = () =>
+      setMs(Math.max(0, new Date(opensAt).getTime() - Date.now()));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [opensAt]);
+
+  if (!opensAt || ms <= 0) return null;
+
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  const label = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span className="text-micro uppercase tracking-[0.22em] text-text-dim">
+        Abre en
+      </span>
+      <span
+        role="timer"
+        aria-live="off"
+        aria-label={`La votación abre en ${label}`}
+        className="font-display text-display font-black tabular-nums text-ey-yellow"
+      >
+        {label}
+      </span>
     </div>
   );
 }

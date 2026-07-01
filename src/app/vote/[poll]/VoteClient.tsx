@@ -46,6 +46,7 @@ export function VoteClient({
     error,
     submit,
     submitting,
+    opensAt,
     closesAt,
     totalTeams,
   } = useVoteFlow(poll, teams, alreadyVotedOnReload);
@@ -63,6 +64,7 @@ export function VoteClient({
               selectedId={selectedId}
               onSelect={setSelectedId}
               reduced={reduced}
+              opensAt={opensAt}
               closesAt={closesAt}
             />
           )}

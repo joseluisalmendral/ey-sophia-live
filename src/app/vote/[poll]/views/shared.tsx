@@ -17,8 +17,10 @@ export const COPY = {
   cta: "VOTAR",
   ctaPick: "Elige un equipo",
   sending: "Enviando…",
-  lobbyTitle: "La votación abre en breve",
+  lobbyTitle: "La votación aún no está abierta",
   lobbySub: "Prepara tu favorito. En cuanto se abra, tu voto entra al instante.",
+  lobbyWaitHint:
+    "Espera a que se abra la votación. Cuando el presentador la abra, aquí aparecerán las opciones para votar.",
   closedTitle: "La votación ya cerró",
   closedSub: "Esta vez no llegaste a tiempo, pero mira la pantalla grande.",
   confirmKicker: "¡Voto registrado!",

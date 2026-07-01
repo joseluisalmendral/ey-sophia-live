@@ -110,6 +110,8 @@ export interface VoteFlow {
   error: string | null;
   submit: () => void;
   submitting: boolean;
+  /** Server open timestamp (future during countdown) so the lobby can count in. */
+  opensAt: string | null;
   closesAt: string | null;
   totalTeams: number;
 }
@@ -291,6 +293,7 @@ export function useVoteFlow(
     error,
     submit,
     submitting: action === "submitting",
+    opensAt,
     closesAt,
     totalTeams,
   };
