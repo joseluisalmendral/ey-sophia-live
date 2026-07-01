@@ -14,11 +14,16 @@ import type { PollStatus } from "@/lib/types";
  *
  * Cadence + abuse-safety (all deliberate so the polling reads as normal traffic,
  * never an attack):
- *  - Base interval 4s BEFORE voting, 8s AFTER voting (post-vote users only need
+ *  - Base interval 12s BEFORE voting, 20s AFTER voting (post-vote users only need
  *    to learn when the poll closes — they watch the big screen for the race).
+ *    Deliberately slow: a full room behind ONE venue NAT IP then produces only
+ *    ~20 req/s, far below Vercel's DDoS-mitigation threshold, so the room is never
+ *    served a 403 (x-vercel-mitigated). The screen keeps realtime for the race.
+ *  - A random initial delay (0..base) spreads the first poll so a room that loads
+ *    together does not fire one synchronized same-IP burst.
  *  - ±30% random jitter per tick so phones that loaded together do not sync into
  *    a thundering herd hitting the origin on the same second.
- *  - A hard floor: never schedule a request sooner than MIN_INTERVAL_MS (3s).
+ *  - A hard floor: never schedule a request sooner than MIN_INTERVAL_MS (10s).
  *  - Exponential backoff on fetch error (capped), so a flaky network backs off
  *    instead of hammering.
  *  - AbortController + an in-flight guard: requests never overlap.
@@ -33,11 +38,11 @@ import type { PollStatus } from "@/lib/types";
  */
 
 /** Base cadence before the voter has acted (they still need the open flip). */
-const BASE_INTERVAL_BEFORE_MS = 4000;
+const BASE_INTERVAL_BEFORE_MS = 12000;
 /** Slower cadence after voting: they only await close/reveal. */
-const BASE_INTERVAL_AFTER_MS = 8000;
+const BASE_INTERVAL_AFTER_MS = 20000;
 /** Hard floor — a scheduled tick is never sooner than this, jitter included. */
-const MIN_INTERVAL_MS = 3000;
+const MIN_INTERVAL_MS = 10000;
 /** ±30% jitter to desync the room. */
 const JITTER_RATIO = 0.3;
 /** Backoff cap on repeated fetch errors. */
@@ -189,8 +194,12 @@ export function usePollStatus(
       }
     };
 
-    // Kick immediately, then on cadence.
-    void tick();
+    // Spread the FIRST request across the base interval so a room that scans the
+    // QR together does not fire a synchronized burst from the venue's single NAT
+    // IP (Vercel's DDoS mitigation would read a big same-IP spike as an attack).
+    // The SSR snapshot already renders the correct initial state, so delaying the
+    // first client poll costs no UX.
+    schedule(Math.random() * BASE_INTERVAL_BEFORE_MS);
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", onVisibility);
     }
