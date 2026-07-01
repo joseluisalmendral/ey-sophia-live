@@ -73,11 +73,11 @@ export default function AdminLoginPage() {
                 📬
               </div>
               <h2 className="font-display text-h3 font-bold text-text">
-                Revisá tu correo
+                Revisa tu correo
               </h2>
               <p className="text-small text-text-dim">
-                Te enviamos un enlace de acceso a{" "}
-                <span className="font-medium text-text">{email}</span>. Abrilo en
+                Te hemos enviado un enlace de acceso a{" "}
+                <span className="font-medium text-text">{email}</span>. Ábrelo en
                 este mismo dispositivo para entrar.
               </p>
               <button

@@ -146,9 +146,9 @@ function humanError(code?: string): string {
     case "invalid_email":
       return "El correo no es válido.";
     case "cannot_remove_last_admin":
-      return "No podés quitar al último administrador.";
+      return "No puedes quitar al último administrador.";
     case "not_authorized":
-      return "No tenés permisos para esta acción.";
+      return "No tienes permisos para esta acción.";
     default:
       return code ?? "Error";
   }

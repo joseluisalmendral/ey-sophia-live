@@ -58,8 +58,8 @@ export default function GlobalError({
           Algo salió mal
         </h1>
         <p style={{ margin: 0, maxWidth: 360, color: TEXT_DIM }}>
-          Se produjo un error crítico. Reintentá; si continúa, actualizá la
-          página.
+          Se ha producido un error crítico. Reinténtalo; si continúa, actualiza
+          la página.
         </p>
         <button
           type="button"

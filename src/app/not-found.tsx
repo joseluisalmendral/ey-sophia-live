@@ -20,7 +20,7 @@ export default function NotFound() {
             </h1>
             <p className="max-w-sm text-body text-text-dim">
               El enlace puede haber caducado o el código no es correcto.
-              Verificá el código de acceso con el organizador.
+              Verifica el código de acceso con el organizador.
             </p>
           </div>
           <Link

@@ -70,7 +70,7 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                   <span className="font-display text-[clamp(1.1rem,2vw,1.8rem)] font-black leading-none text-text">
                     Soph<span className="text-ey-yellow">IA</span>
                     <span className="ml-2 text-[clamp(0.7rem,1.1vw,1rem)] font-bold uppercase tracking-[0.25em] text-text-dim">
-                      Live
+                      EN VIVO
                     </span>
                   </span>
                 </div>

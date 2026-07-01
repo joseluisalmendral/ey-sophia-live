@@ -58,7 +58,7 @@ export function CountdownTimer({
     <span
       role="timer"
       aria-live={urgent ? "assertive" : "off"}
-      aria-label={`Time remaining ${format(ms)}`}
+      aria-label={`Tiempo restante ${format(ms)}`}
       className={[
         "inline-flex items-center gap-1.5 rounded-pill font-display font-extrabold tabular-nums tracking-tight",
         isHero

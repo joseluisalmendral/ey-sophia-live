@@ -44,8 +44,8 @@ export default async function PanelLayout({
           <p className="mt-2 text-small text-text-dim">
             La cuenta{" "}
             <span className="font-medium text-text">{claims.email}</span> no está
-            en la lista de administradores. Si creés que es un error, pedile a un
-            administrador que te agregue.
+            en la lista de administradores. Si crees que es un error, pide a un
+            administrador que te añada.
           </p>
           <div className="mt-6 flex justify-center">
             <SignOutButton variant="solid" />

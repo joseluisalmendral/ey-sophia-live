@@ -53,7 +53,7 @@ export default async function AdminPollsPage() {
       {polls.length === 0 ? (
         <div className="rounded-xl border border-dashed border-white/15 bg-surface-raised/50 p-12 text-center">
           <p className="text-body text-text-dim">
-            Creá tu primera votación para empezar.
+            Crea tu primera votación para empezar.
           </p>
           <Link
             href="/admin/new"

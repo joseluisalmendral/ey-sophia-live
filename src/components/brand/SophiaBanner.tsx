@@ -63,7 +63,7 @@ export function SophiaBanner({
               <span className="text-ey-yellow">IA</span>
             </span>
             <span className="text-micro uppercase tracking-[0.22em] text-text-dim">
-              Live
+              EN VIVO
             </span>
           </div>
         </div>
@@ -76,15 +76,17 @@ export function SophiaBanner({
 
         {/* Co-brand footer row — thePower logo, set apart from the beam */}
         <div className="flex items-center gap-2 pt-1 text-micro text-text-dim">
-          <span>in collaboration with</span>
-          <Image
-            src="/brand/thepower-logo.webp"
-            alt="thePower"
-            width={isHero ? 96 : 72}
-            height={isHero ? 24 : 18}
-            className="opacity-90"
-            priority={isHero}
-          />
+          <span>en colaboración con</span>
+          {/* White chip so thePower's dark-navy logo stays legible on the cosmic bg */}
+          <span className="inline-flex items-center rounded-[12px] bg-white px-2.5 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.28)] ring-1 ring-black/5">
+            <Image
+              src="/brand/thepower-logo.webp"
+              alt="thePower"
+              width={isHero ? 96 : 72}
+              height={isHero ? 24 : 18}
+              priority={isHero}
+            />
+          </span>
         </div>
       </div>
     </section>

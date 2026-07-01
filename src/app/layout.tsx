@@ -20,7 +20,7 @@ const overpass = Overpass({
 export const metadata: Metadata = {
   title: "EY SophIA Live",
   description:
-    "Live audience voting for EY SophIA, in collaboration with thePower.",
+    "Votación en vivo del público para EY SophIA, en colaboración con thePower.",
 };
 
 export default function RootLayout({

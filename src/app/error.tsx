@@ -30,8 +30,8 @@ export default function Error({
               Algo salió mal
             </h1>
             <p className="max-w-sm text-body text-text-dim">
-              Se produjo un error inesperado. Podés reintentar; si continúa,
-              actualizá la página en unos segundos.
+              Se ha producido un error inesperado. Puedes reintentar; si
+              continúa, actualiza la página en unos segundos.
             </p>
           </div>
           <button

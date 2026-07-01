@@ -38,7 +38,7 @@ export function QrCode({ value, size = 240, className }: QrCodeProps) {
           marginSize={0}
           bgColor="#ffffff"
           fgColor="#0B1026"
-          title="Scan to vote"
+          title="Escanea para votar"
         />
       </div>
     </div>
