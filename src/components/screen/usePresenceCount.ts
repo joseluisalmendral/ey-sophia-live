@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * usePresenceCount — a live "people in the room" count for the lobby, via
+ * Lobby presence for the projector — live roster + count of joined voters, via
  * Supabase Realtime PRESENCE on a dedicated lobby channel.
  *
  * Design:
@@ -17,22 +17,55 @@ import { createClient } from "@/lib/supabase/client";
  *  - The presence key is generated ONCE per hook instance (useRef), never per
  *    effect run, so re-subscribes don't inflate the count with stale keys.
  *  - Each presence entry is tagged with a `role`. The projector SCREEN tags itself
- *    `screen` and is EXCLUDED from the count — the count reflects joined VOTERS,
+ *    `screen` and is EXCLUDED from the roster/count — they reflect joined VOTERS,
  *    not the board showing the count.
+ *  - Voter entries MAY carry an anonymous `alias` ("Vega 12") tracked from the
+ *    voter lobby. Entries WITHOUT an alias (older clients) still count; they are
+ *    simply not shown by name in the feed.
  *
- * Degrades gracefully: if presence never syncs (auth/policy/offline), the count
- * stays null and the caller shows a tasteful "scan to join" prompt instead.
+ * Degrades gracefully: if presence never syncs (auth/policy/offline), the state
+ * stays null/empty and the caller shows a tasteful "scan to join" prompt instead.
+ */
+
+/** One joined voter as seen by the projector lobby. */
+export interface LobbyMember {
+  /** Stable presence key for this client (dedup / React key). */
+  key: string;
+  /** Anonymous display alias; null for legacy entries that never sent one. */
+  alias: string | null;
+  /** Client-reported join timestamp (ms epoch); used only for feed ordering. */
+  at: number;
+}
+
+export interface LobbyRoster {
+  /** Distinct joined voters; null until presence first syncs. */
+  count: number | null;
+  /** Joined voters, most recent first. */
+  members: LobbyMember[];
+}
+
+interface PresenceEntry {
+  role?: string;
+  alias?: string;
+  at?: number;
+}
+
+/**
+ * useLobbyRoster — full lobby presence state (count + named roster).
  *
  * @param pollId  the poll whose lobby to observe
  * @param role    this client's presence role; `screen` clients are not counted.
  *                Defaults to `screen` (this hook is used by the projector).
  */
-export function usePresenceCount(
+export function useLobbyRoster(
   pollId: string,
   role: "screen" | "voter" = "screen",
-): number | null {
+): LobbyRoster {
   const supabase = useMemo(() => createClient(), []);
-  const [count, setCount] = useState<number | null>(null);
+  const [roster, setRoster] = useState<LobbyRoster>({
+    count: null,
+    members: [],
+  });
 
   // Stable presence key for this hook instance's lifetime. Lazily generated
   // ONCE inside the effect (Math.random is impure — never call it during render);
@@ -52,14 +85,21 @@ export function usePresenceCount(
 
     const recompute = () => {
       if (!active) return;
-      const state = channel.presenceState<{ role?: string }>();
-      // Count distinct presence keys whose role is NOT `screen` (exclude boards).
-      let voters = 0;
-      for (const entries of Object.values(state)) {
+      const state = channel.presenceState<PresenceEntry>();
+      // Collect distinct presence keys whose role is NOT `screen` (exclude boards).
+      const members: LobbyMember[] = [];
+      for (const [presenceKey, entries] of Object.entries(state)) {
         const isScreen = entries.some((e) => e.role === "screen");
-        if (!isScreen) voters += 1;
+        if (isScreen) continue;
+        const withMeta = entries.find((e) => typeof e.alias === "string");
+        members.push({
+          key: presenceKey,
+          alias: withMeta?.alias ?? null,
+          at: entries[0]?.at ?? 0,
+        });
       }
-      setCount(voters);
+      members.sort((a, b) => b.at - a.at);
+      setRoster({ count: members.length, members });
     };
 
     const connect = async () => {
@@ -78,7 +118,7 @@ export function usePresenceCount(
           if (status === "SUBSCRIBED") {
             void channel.track({ at: Date.now(), role });
           }
-          // On error/timeout we simply leave count as-is (null or last known);
+          // On error/timeout we simply leave state as-is (null or last known);
           // the caller degrades to the "scan to join" prompt. No throw.
         });
     };
@@ -91,5 +131,16 @@ export function usePresenceCount(
     };
   }, [pollId, supabase, role]);
 
-  return count;
+  return roster;
+}
+
+/**
+ * usePresenceCount — count-only view over the lobby roster (kept for callers
+ * that only need the number). Same channel/auth semantics as useLobbyRoster.
+ */
+export function usePresenceCount(
+  pollId: string,
+  role: "screen" | "voter" = "screen",
+): number | null {
+  return useLobbyRoster(pollId, role).count;
 }

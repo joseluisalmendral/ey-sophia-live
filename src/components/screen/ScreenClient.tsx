@@ -91,7 +91,7 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                 <div className="flex items-center gap-3">
                   <EyBeam surface="dark" size={36} label="" />
                   <span className="font-display text-[clamp(1.1rem,2vw,1.8rem)] font-black leading-none text-text">
-                    Soph<span className="text-ey-yellow">IA</span>
+                    Soph<span className="text-sophia-purple">IA</span>
                     <span className="ml-2 text-[clamp(0.7rem,1.1vw,1rem)] font-bold uppercase tracking-[0.25em] text-text-dim">
                       EN VIVO
                     </span>
@@ -148,7 +148,14 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                   transition={{ duration: durations.base }}
                   className="absolute inset-0"
                 >
-                  <RevealStage teams={live.teams} tieRule={poll.tieRule} reduced={reduced} />
+                  {/* `ready` gates the reveal choreography until the initial
+                      absolute tally has seeded (live.teams starts empty). */}
+                  <RevealStage
+                    teams={live.teams}
+                    tieRule={poll.tieRule}
+                    reduced={reduced}
+                    ready={live.ready}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>

@@ -5,6 +5,7 @@ import { ShaderBackground } from "@/components/providers/ShaderBackground";
 import { durations, easings } from "@/lib/motion/tokens";
 import type { Poll, Team } from "@/lib/types";
 import { useVoteFlow } from "./useVoteFlow";
+import { useLobbyPresence } from "./useLobbyPresence";
 import { COPY } from "./views/shared";
 import { VotingView } from "./views/VotingView";
 import { ConfirmView } from "./views/ConfirmView";
@@ -49,7 +50,13 @@ export function VoteClient({
     opensAt,
     closesAt,
     totalTeams,
+    justMissed,
   } = useVoteFlow(poll, teams, alreadyVotedOnReload);
+
+  // Lobby-only presence: lets the projector show this voter joining (anonymous
+  // alias). Torn down the instant the poll opens — the voting path stays
+  // websocket-free (see useLobbyPresence for the scope rationale).
+  useLobbyPresence(poll.id, phase === "lobby");
 
   return (
     <ShaderBackground>
@@ -78,7 +85,7 @@ export function VoteClient({
           )}
 
           {phase === "closedNoVote" && (
-            <ClosedView key="closed" reduced={reduced} />
+            <ClosedView key="closed" reduced={reduced} justMissed={justMissed} />
           )}
 
           {phase === "reveal" && (

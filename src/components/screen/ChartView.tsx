@@ -155,17 +155,28 @@ export const ChartView = memo(function ChartView({
           },
           label: {
             show: true,
-            position: "top",
             color: TEXT,
             fontSize: 26,
             fontWeight: "bold",
           },
+          // Vote count anchored INSIDE the column at its base (live AND reveal),
+          // colored for AA contrast against the actual rendered bar color (the
+          // leader's bar is forced to EY yellow, so contrast runs on that, not
+          // the raw team color). Zero-height bars have no "inside" to write on,
+          // so 0 falls back to a dim label above the baseline.
           data: teams.map((t) => ({
             value: t.count,
-            label: {
-              color:
-                t.rank === 1 && t.count > 0 ? EY_YELLOW : pickTextOn(t.color),
-            },
+            label:
+              t.count > 0
+                ? {
+                    position: "insideBottom" as const,
+                    distance: 10,
+                    color: pickTextOn(colorFor(t)),
+                  }
+                : {
+                    position: "top" as const,
+                    color: TEXT_DIM,
+                  },
           })),
         },
       ],

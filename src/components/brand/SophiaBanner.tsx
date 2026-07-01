@@ -32,7 +32,8 @@ export function SophiaBanner({
       className={[
         "relative isolate overflow-hidden rounded-xl",
         "bg-cosmic-deep",
-        isHero ? "px-6 py-10 sm:px-10 sm:py-14" : "px-5 py-6",
+        // Hero stays compact on mobile so the content/action below keeps focus.
+        isHero ? "px-6 py-6 sm:px-8 sm:py-8" : "px-5 py-6",
         className ?? "",
       ].join(" ")}
       style={{
@@ -51,16 +52,22 @@ export function SophiaBanner({
         }}
       />
 
-      <div className="relative flex flex-col gap-5">
-        <div className="flex items-center gap-4">
-          <EyBeam surface="dark" size={isHero ? 52 : 38} label="EY" />
-          <div className="flex flex-col">
+      <div
+        className={[
+          "relative flex flex-col",
+          // Hero: centered, tighter composition; confirmation keeps its original layout.
+          isHero ? "items-center gap-3 text-center" : "gap-5",
+        ].join(" ")}
+      >
+        <div className={["flex items-center", isHero ? "gap-3" : "gap-4"].join(" ")}>
+          <EyBeam surface="dark" size={isHero ? 44 : 38} label="EY" />
+          <div className={["flex flex-col", isHero ? "items-start" : ""].join(" ")}>
             <span
               className="font-display font-extrabold leading-none tracking-tight text-text"
-              style={{ fontSize: isHero ? "var(--text-h1)" : "var(--text-h3)" }}
+              style={{ fontSize: isHero ? "var(--text-h2)" : "var(--text-h3)" }}
             >
               Soph
-              <span className="text-ey-yellow">IA</span>
+              <span className="text-sophia-purple">IA</span>
             </span>
             <span className="text-micro uppercase tracking-[0.22em] text-text-dim">
               EN VIVO
@@ -69,13 +76,18 @@ export function SophiaBanner({
         </div>
 
         {isHero && tagline && (
-          <p className="max-w-md text-balance text-h3 font-medium leading-snug text-text">
+          <p className="max-w-md text-balance text-body font-medium leading-snug text-text">
             {tagline}
           </p>
         )}
 
         {/* Co-brand footer row — thePower logo, set apart from the beam */}
-        <div className="flex items-center gap-2 pt-1 text-micro text-text-dim">
+        <div
+          className={[
+            "flex items-center gap-2 pt-1 text-micro text-text-dim",
+            isHero ? "justify-center" : "",
+          ].join(" ")}
+        >
           <span>en colaboración con</span>
           {/* White chip so thePower's dark-navy logo stays legible on the cosmic bg */}
           <span className="inline-flex items-center rounded-[12px] bg-white px-2.5 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.28)] ring-1 ring-black/5">
