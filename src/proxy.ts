@@ -13,10 +13,15 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except static assets and image optimization:
-     * - _next/static, _next/image
-     * - favicon.ico and common image/file extensions
+     * Only the admin + auth surfaces need the Supabase session refresh. Scoping
+     * the proxy to them (instead of every route) has two benefits:
+     *  1. Public read-only routes (/, /vote, /screen) skip a needless Supabase
+     *     round-trip on every request.
+     *  2. Those public routes are no longer wrapped in the proxy's committed
+     *     `NextResponse.next()` response, so a page calling `notFound()` for a
+     *     missing poll correctly returns HTTP 404 (not 200 with a 404 body).
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/admin/:path*",
+    "/auth/:path*",
   ],
 };
