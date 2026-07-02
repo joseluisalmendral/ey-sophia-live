@@ -235,10 +235,19 @@ const LiveStage = memo(function LiveStage({
   const isDivRace = poll.chartType === "bar_race";
 
   return (
-    <div className="grid h-full w-full grid-cols-[minmax(0,18%)_minmax(0,82%)] items-center gap-[clamp(1rem,3vw,3rem)] px-[clamp(1.5rem,4vw,4rem)] pb-[clamp(1rem,3vh,2.5rem)] pt-[clamp(0.5rem,1.5vh,1.5rem)]">
-      {/* Persistent join rail */}
-      <div className="flex flex-col items-center gap-[clamp(0.6rem,1.6vh,1.2rem)]">
-        <QrCode value={voterUrl} size={140} />
+    <div className="grid h-full w-full grid-cols-[minmax(0,26%)_minmax(0,74%)] items-center gap-[clamp(1rem,2.5vw,2.5rem)] px-[clamp(1.25rem,3vw,3rem)] pb-[clamp(1rem,3vh,2.5rem)] pt-[clamp(0.5rem,1.5vh,1.5rem)]">
+      {/* Persistent join rail — the QR stays big enough to scan from the back
+          of the room (fluid ~200-300px, capped by viewport height so it never
+          crowds the countdown on short screens). */}
+      <div className="flex min-w-0 flex-col items-center gap-[clamp(0.6rem,1.6vh,1.2rem)]">
+        <span className="font-display text-[clamp(0.7rem,1.1vw,1.05rem)] font-bold uppercase tracking-[0.22em] text-text-dim">
+          Escanea para unirte
+        </span>
+        <QrCode
+          value={voterUrl}
+          size={280}
+          className="w-[min(clamp(200px,15.5vw,300px),34vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
+        />
         <CodeBadge code={poll.joinCode} caption="Únete" size="inline" />
         {/* Prominent close countdown when a duration was configured. Pulses < 10s
             (handled inside CountdownTimer). Server-authoritative from closesAt. */}
