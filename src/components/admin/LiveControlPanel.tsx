@@ -339,9 +339,9 @@ export function LiveControlPanel({
                         className="h-full rounded-full transition-[width] duration-300"
                         style={{
                           width: `${pct}%`,
-                          backgroundColor: leading
-                            ? "var(--color-ey-yellow)"
-                            : t.color,
+                          // Always the team's own color; the leader accent
+                          // lives on the yellow count, never the bar fill.
+                          backgroundColor: t.color,
                         }}
                       />
                     </div>

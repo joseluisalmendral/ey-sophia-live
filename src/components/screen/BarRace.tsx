@@ -17,9 +17,10 @@ import type { RankedTeam } from "@/lib/types";
  *    transform, never by animating top/height. This is the smooth "race" feel.
  *  - WIDTH is a spring on the ABSOLUTE value as a % of the current leader's
  *    count, so the leader pins at 100% and everyone races relative to them.
- *  - The leader bar is EY-yellow with the glow-win shadow (the single highlight);
- *    everyone else is a cosmic-tinted track with a thin team-color spine so each
- *    team keeps its identity without competing with the yellow.
+ *  - Every bar is ALWAYS painted with its own team color (a team named "Azul"
+ *    must look blue even while leading). The leader is highlighted by ACCENTS
+ *    only: a full-saturation fill, the glow-win shadow, and yellow rank/count
+ *    text — never by swapping the bar color to EY yellow.
  *
  * Counts show immediately (CountUp). Percentages are whole-number and only once
  * meaningful — `RankedTeam.percentage` is null until then (handled upstream),
@@ -98,8 +99,9 @@ export const BarRace = memo(function BarRace({
                   style={
                     isLeader
                       ? {
-                          background:
-                            "linear-gradient(90deg, color-mix(in srgb, var(--color-ey-yellow) 80%, #ffffff) 0%, var(--color-ey-yellow) 100%)",
+                          // Full-saturation team color + glow: the leader pops
+                          // without losing its identity color.
+                          background: `linear-gradient(90deg, color-mix(in srgb, ${team.color} 85%, #ffffff) 0%, ${team.color} 100%)`,
                           boxShadow: "var(--shadow-glow-win)",
                         }
                       : {
@@ -110,7 +112,7 @@ export const BarRace = memo(function BarRace({
                   {/* Team identity inside the bar (legible via pickTextOn for leader). */}
                   <span className="flex min-w-0 items-center gap-[clamp(0.4rem,0.9vw,0.8rem)] pl-[clamp(0.6rem,1.2vw,1.1rem)]">
                     <TeamColorChip
-                      color={isLeader ? "#FFE600" : team.color}
+                      color={team.color}
                       label={team.name.charAt(0).toUpperCase()}
                       size={28}
                     />

@@ -19,8 +19,9 @@ import type { RevealOutcome } from "./winner";
  * which never animates height). The winner score SLAMS in with the slam spring.
  *
  * Winner(s) wear a crown (two crowns on a double-crown tie, both sharing the
- * center plinth). The winner block is EY-yellow (single highlight); 2nd/3rd are
- * cosmic plinths with their team-color spine.
+ * center plinth). Every plinth is painted with its OWN team color — the winner
+ * gets a full-saturation fill plus accents (crown, glow-win shadow, yellow
+ * name), never a bar-color swap to EY yellow.
  *
  * Reduced motion: blocks fade/scale in place, crown is static (handled in Crown),
  * CountUp uses NumberFlow's built-in reduced-motion.
@@ -118,9 +119,11 @@ function PodiumBlock({
   delay: number;
   crownLabel?: string;
 }) {
-  const fg = isWinner ? "#1A1A24" : pickTextOn(team.color);
+  // Text inside the plinth contrasts against the team's real color (the winner
+  // plinth is full-saturation team color, so contrast runs on that).
+  const fg = pickTextOn(team.color);
   const plinthBg = isWinner
-    ? "linear-gradient(180deg, color-mix(in srgb, #FFE600 90%, #fff) 0%, #FFE600 100%)"
+    ? `linear-gradient(180deg, color-mix(in srgb, ${team.color} 88%, #fff) 0%, ${team.color} 100%)`
     : `linear-gradient(180deg, color-mix(in srgb, ${team.color} 45%, var(--color-cosmic-700)) 0%, color-mix(in srgb, ${team.color} 22%, var(--color-cosmic-700)) 100%)`;
 
   return (
@@ -147,7 +150,7 @@ function PodiumBlock({
         className="mb-2 flex flex-col items-center gap-1.5 text-center"
       >
         <TeamColorChip
-          color={isWinner ? "#FFE600" : team.color}
+          color={team.color}
           label={team.name.charAt(0).toUpperCase()}
           size={isWinner ? 56 : 44}
         />

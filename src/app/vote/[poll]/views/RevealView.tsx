@@ -40,9 +40,13 @@ export function RevealView({
               className="font-display font-black leading-none"
               style={{
                 fontSize: "var(--text-display-2xl)",
-                color: rank === 1 ? "var(--color-ey-yellow)" : team.color,
+                // Always the team's real color; winners get a glow accent in
+                // their own color instead of swapping to EY yellow.
+                color: team.color,
                 textShadow:
-                  rank === 1 ? "0 0 48px rgba(255,230,0,0.4)" : undefined,
+                  rank === 1
+                    ? `0 0 48px color-mix(in srgb, ${team.color} 45%, transparent)`
+                    : undefined,
               }}
             >
               #{rank}

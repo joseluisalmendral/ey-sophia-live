@@ -61,7 +61,7 @@ const BATCH_MS = 120;
 // Backstop resync cadence while the poll is OPEN: even if a tally broadcast is
 // silently dropped (degraded wifi, throttled tab) no vote stays unpainted for
 // longer than this.
-const OPEN_RESYNC_MS = 30_000;
+const OPEN_RESYNC_MS = 10_000;
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 // Percentages stay hidden until the room is meaningful (no "67%" at 3 votes).

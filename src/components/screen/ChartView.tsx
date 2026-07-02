@@ -31,16 +31,16 @@ const CHART_FONT_FAMILY = "Overpass, Inter, ui-sans-serif, system-ui, sans-serif
  * ChartView — ECharts renderer for the `donut` and `columns` chart types.
  *
  * The hero bar-race is hand-built styled divs (BarRace); ECharts is reserved for
- * these alternate visualizations. Themed to the cosmic/EY-yellow palette: the
- * leader is forced to EY-yellow (the single highlight), everyone else keeps
- * their team color, all text is projector-legible off-white with tabular-ish
- * sizing, and there are no chart chrome/grid lines fighting the dark stage.
+ * these alternate visualizations. Themed to the cosmic palette: every team is
+ * ALWAYS rendered with its own assigned color (a team named "Azul" must look
+ * blue even while leading), all text is projector-legible off-white with
+ * tabular-ish sizing, and there are no chart chrome/grid lines fighting the
+ * dark stage. EY yellow remains an accent (emphasis glow), never a bar color.
  *
  * Live updates: ECharts diffs on the `option` object, so feeding fresh data each
  * render animates bars/arcs smoothly. `notMerge={false}` keeps that diff path.
  */
 
-const EY_YELLOW = "#FFE600";
 const TEXT = "#F6F6FA";
 const TEXT_DIM = "#C4C4CD";
 
@@ -70,8 +70,8 @@ export const ChartView = memo(function ChartView({
     // Projector-legible type scale: values/labels must read from the back of a
     // room, so all data/axis fonts run notably larger than chart defaults.
     const fs = (base: number) => Math.round(base * vwScale);
-    const colorFor = (t: RankedTeam) =>
-      t.rank === 1 && t.count > 0 ? EY_YELLOW : t.color;
+    // Teams always paint with their own assigned color — no leader override.
+    const colorFor = (t: RankedTeam) => t.color;
 
     const base: EChartsOption = {
       backgroundColor: "transparent",
@@ -177,8 +177,7 @@ export const ChartView = memo(function ChartView({
           },
           // Vote count anchored INSIDE the column at its base (live AND reveal),
           // colored for AA contrast against the actual rendered bar color (the
-          // leader's bar is forced to EY yellow, so contrast runs on that, not
-          // the raw team color). Zero-height bars have no "inside" to write on,
+          // team's own color). Zero-height bars have no "inside" to write on,
           // so 0 falls back to a dim label above the baseline.
           data: teams.map((t) => ({
             value: t.count,
