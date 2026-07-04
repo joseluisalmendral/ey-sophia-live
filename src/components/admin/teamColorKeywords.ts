@@ -20,7 +20,7 @@ const COLOR_KEYWORDS: Record<string, string> = {
   verde: "#3DDC84",
   amarillo: "#FFE600", // EY yellow
   naranja: "#FF9F40",
-  morado: "#8b5cf6", // --color-sophia-purple
+  morado: "#8b5cf6",
   violeta: "#8b5cf6",
   purpura: "#8b5cf6",
   rosa: "#FF7EB6",

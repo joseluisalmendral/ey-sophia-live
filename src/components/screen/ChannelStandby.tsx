@@ -18,7 +18,7 @@ export function ChannelStandby({ slug }: { slug: string }) {
           <EyBeam surface="dark" size={72} label="" />
           <div className="flex flex-col items-center gap-3">
             <h1 className="font-display text-[clamp(2.5rem,6vw,5rem)] font-black tracking-tight text-text">
-              Soph<span className="text-sophia-purple">IA</span>{" "}
+              Soph<span className="text-sophia-accent glow-sophia">IA</span>{" "}
               <span className="text-ey-yellow">Live</span>
             </h1>
             <p className="text-[clamp(1rem,2vw,1.5rem)] font-semibold text-text-dim">

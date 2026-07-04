@@ -67,7 +67,7 @@ export function SophiaBanner({
               style={{ fontSize: isHero ? "var(--text-h2)" : "var(--text-h3)" }}
             >
               Soph
-              <span className="text-sophia-purple">IA</span>
+              <span className="text-sophia-accent glow-sophia">IA</span>
             </span>
             <span className="text-micro uppercase tracking-[0.22em] text-text-dim">
               EN VIVO

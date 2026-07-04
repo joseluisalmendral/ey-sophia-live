@@ -9,7 +9,7 @@ import { durations, easings } from "@/lib/motion/tokens";
  * Curtain — the TELÓN beat: two 3D curtain panels (CSS perspective, pleated
  * fabric, gold seam trim, roaming sheen) slam shut over the stage. The left
  * panel carries the EY SophIA co-brand (EY beam + "SophIA" wordmark with the
- * "IA" in sophia-purple); the right panel carries thePower. A pulsing
+ * "IA" in the sophia blue accent); the right panel carries thePower. A pulsing
  * "Y el equipo ganador es…" rides the seam.
  *
  * The OPENING is the AnimatePresence exit: when the parent advances to the
@@ -53,7 +53,7 @@ export function Curtain({ reduced, openSeconds }: CurtainProps) {
         <div className="flex flex-col items-center gap-4">
           <EyBeam surface="dark" size={72} label="EY" />
           <span className="font-display text-[clamp(2.2rem,5vw,4.5rem)] font-extrabold leading-none tracking-tight text-text">
-            Soph<span className="text-sophia-purple">IA</span>
+            Soph<span className="text-sophia-accent glow-sophia">IA</span>
           </span>
         </div>
       </CurtainPanel>

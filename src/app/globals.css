@@ -26,10 +26,11 @@
   --color-cosmic-700: #1e2647; /* raised cosmic surface */
 
   /* --- SophIA brand accent --- */
-  /* Slightly dark premium violet for the "IA" in the SophIA wordmark. Used only
+  /* Deep-but-luminous royal blue for the "IA" in the SophIA wordmark. Used only
      on large/bold display text over the dark cosmic base: ~4.4:1 on cosmic-deep
-     and >=3:1 on every raised surface, comfortably passing WCAG AA for large text. */
-  --color-sophia-purple: #8b5cf6;
+     and ~3.5:1 on raised surfaces (WCAG AA large text), always paired with the
+     .glow-sophia halo for extra separation from the background. */
+  --color-sophia-accent: #3575f0;
 
   /* --- thePower co-brand accent --- */
   /* Sampled from public/brand/thepower-logo.webp (dominant green band). */
@@ -107,6 +108,12 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Soft halo behind the SophIA "IA" accent so the blue keeps reading crisply
+   on every dark surface (pairs with text-sophia-accent). */
+.glow-sophia {
+  text-shadow: 0 0 20px rgb(53 117 240 / 0.55);
 }
 
 /* Tabular numerals everywhere counters/percentages render (prevents layout shift). */
