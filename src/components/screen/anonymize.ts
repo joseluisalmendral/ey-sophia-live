@@ -9,12 +9,16 @@ import type { RankedTeam, Team } from "@/lib/types";
  * percentages pass through untouched, so BarRace / donut / columns all render
  * the anonymized race for free (the mapping runs BEFORE the render).
  *
- * Identity assignment is keyed on the team's CONFIGURED position ("Equipo A" =
- * position 0), NEVER on the current ranking: a rank-based label would re-identify
- * teams the moment bars swap (the label would visibly follow the movement the
- * audience already associates with a team). Position is stable for the whole
- * run, so each bar keeps its letter and shade and can be followed as a bar —
- * without leaking which real team it is.
+ * Labels: every masked team reads "???" (chip "?") — deliberately identical, so
+ * no label ever hints at an identity. Visual tracking of each bar is carried by
+ * the color variants + the bar's position, never by the label.
+ *
+ * Color assignment is keyed on the team's CONFIGURED position, NEVER on the
+ * current ranking: a rank-based shade would re-identify teams the moment bars
+ * swap (the shade would visibly follow the movement the audience already
+ * associates with a team). Position is stable for the whole run, so each bar
+ * keeps its shade and can be followed as a bar — without leaking which real
+ * team it is.
  *
  * Colors: N subtle variants of ONE neutral cosmic indigo — never the EY yellow
  * accent, never any real team color. The variants differ just enough in hue and
@@ -22,16 +26,13 @@ import type { RankedTeam, Team } from "@/lib/types";
  * withheld" as a set. Labels drawn on top must keep using pickTextOn.
  */
 
-/** Letters for anonymous team labels; wraps to AA, AB… beyond 26 (unrealistic). */
-function anonymousName(index: number): string {
-  let label = "";
-  let i = index;
-  do {
-    label = String.fromCharCode(65 + (i % 26)) + label;
-    i = Math.floor(i / 26) - 1;
-  } while (i >= 0);
-  return `Equipo ${label}`;
-}
+/**
+ * The single masked label. All hidden teams share it on purpose: any per-team
+ * label (letters, numbers) invites the room to map labels to teams; identical
+ * question marks read unambiguously as "identity withheld". teamInitial("???")
+ * yields "?" so the chips collapse to a plain question mark too.
+ */
+export const ANONYMOUS_NAME = "???";
 
 /** Convert HSL (h 0-360, s/l 0-100) to a #rrggbb hex string. */
 function hslToHex(h: number, s: number, l: number): string {
@@ -62,8 +63,8 @@ export function anonymousColor(index: number, total: number): string {
 
 /**
  * Chip initial for a team name: first char of the LAST word, so "Equipo Rojo"
- * reads "R" and the anonymous "Equipo A/B/C" read "A"/"B"/"C" instead of every
- * chip collapsing to "E". Single-word names keep their first char.
+ * reads "R" instead of every chip collapsing to "E". Single-word names keep
+ * their first char; the anonymous "???" naturally reads "?".
  */
 export function teamInitial(name: string): string {
   const words = name.trim().split(/\s+/);
@@ -90,7 +91,7 @@ export function anonymizeIdentities<T extends { id: string; name: string; color:
     const position = positionById.get(row.id) ?? i;
     return {
       ...row,
-      name: anonymousName(position),
+      name: ANONYMOUS_NAME,
       color: anonymousColor(position, total),
     };
   });

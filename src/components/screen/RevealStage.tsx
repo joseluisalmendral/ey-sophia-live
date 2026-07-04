@@ -30,7 +30,7 @@ import type { RankedTeam, TieRule } from "@/lib/types";
  *       onto the existing podium climax: rise + crown + confetti edge-burst +
  *       WebAudio sting + ~4s fireworks finale that STOPS.
  *
- * Timings live in reveal/constants.ts (~11s full arc, ~5s reduced).
+ * Timings live in reveal/constants.ts (~17s full arc, ~7.5s reduced).
  *
  * Zero votes: hint + name-tease beats are skipped (no winner to tease); the
  * curtain still opens onto the designed "Sin votos esta vez" state.

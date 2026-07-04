@@ -23,12 +23,14 @@ export function ColorHint({ winners, reduced }: ColorHintProps) {
 
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-8 overflow-hidden text-center">
-      {/* Color blooms behind the copy */}
+      {/* Color blooms behind the copy. The outer div runs the one-shot bloom;
+          the inner div keeps a slow infinite breathing loop so the extended
+          hint beat (see reveal/constants.ts) never reads as a frozen frame. */}
       {colors.map((color, i) => (
         <motion.div
           key={`${color}-${i}`}
           aria-hidden
-          className="pointer-events-none absolute rounded-full blur-3xl"
+          className="pointer-events-none absolute"
           style={{
             width: "70vmin",
             height: "70vmin",
@@ -36,7 +38,6 @@ export function ColorHint({ winners, reduced }: ColorHintProps) {
             right: colors.length === 2 && i === 1 ? "8%" : "auto",
             top: "50%",
             translate: colors.length === 2 ? "0 -50%" : "-50% -50%",
-            background: `radial-gradient(circle, color-mix(in srgb, ${color} 55%, transparent) 0%, transparent 68%)`,
           }}
           initial={{ opacity: 0, scale: reduced ? 1 : 0.4 }}
           animate={
@@ -49,7 +50,24 @@ export function ColorHint({ winners, reduced }: ColorHintProps) {
               ? { duration: durations.slow }
               : { duration: 2.4, times: [0, 0.35, 0.6, 1], ease: "easeInOut", delay: i * 0.25 }
           }
-        />
+        >
+          <motion.div
+            className="h-full w-full rounded-full blur-3xl"
+            style={{
+              background: `radial-gradient(circle, color-mix(in srgb, ${color} 55%, transparent) 0%, transparent 68%)`,
+            }}
+            animate={
+              reduced
+                ? undefined
+                : { scale: [1, 1.06, 1], opacity: [1, 0.82, 1] }
+            }
+            transition={
+              reduced
+                ? undefined
+                : { duration: 2.8, repeat: Infinity, ease: "easeInOut", delay: 2.4 + i * 0.25 }
+            }
+          />
+        </motion.div>
       ))}
 
       <motion.span

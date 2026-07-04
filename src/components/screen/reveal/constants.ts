@@ -3,7 +3,11 @@
  *
  * The cinematic arc is: dim -> suspense -> color hint -> name tease -> curtain
  * (closed hold) -> curtain opens onto the podium climax. Total time from close
- * to podium is the sum of the beats (~11s full motion, ~5s reduced) — tune here.
+ * to podium is the sum of the beats (~17s full motion, ~7.5s reduced) — tune
+ * here. Room-tested: ~11s felt rushed live — the audience needs air to guess
+ * on each clue — so suspense and both teasers breathe longer. Every extended
+ * beat carries a running loop (title pulse, bloom breathing, glitch cycle,
+ * curtain sheen) so nothing reads as frozen.
  */
 
 export interface RevealBeatTimings {
@@ -22,20 +26,20 @@ export interface RevealBeatTimings {
 }
 
 export const REVEAL_BEATS: RevealBeatTimings = {
-  dim: 0.5,
-  suspense: 2.2,
-  hint: 2.6,
-  name: 3.2,
-  curtainHold: 2.4,
-  curtainOpen: 1.2,
+  dim: 0.6,
+  suspense: 3.2,
+  hint: 3.8,
+  name: 4.6,
+  curtainHold: 3.4,
+  curtainOpen: 1.4,
 };
 
-/** Same beats, compressed, for prefers-reduced-motion (crossfades only). */
+/** Same beats, compressed proportionally, for prefers-reduced-motion (crossfades only). */
 export const REVEAL_BEATS_REDUCED: RevealBeatTimings = {
   dim: 0.3,
-  suspense: 0.9,
-  hint: 1.2,
-  name: 1.6,
-  curtainHold: 1.4,
+  suspense: 1.3,
+  hint: 1.7,
+  name: 2.1,
+  curtainHold: 1.6,
   curtainOpen: 0.5,
 };

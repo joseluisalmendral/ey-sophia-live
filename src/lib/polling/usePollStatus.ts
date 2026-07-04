@@ -16,7 +16,7 @@ import type { PollStatus } from "@/lib/types";
  * never an attack). The cadence is STATUS-AWARE so open-detection is fast without
  * ever approaching Vercel's DDoS threshold (all responses are CDN-cached, so a
  * whole room collapses to ~1 origin hit / s-maxage window regardless):
- *  - WAITING (status draft/countdown, not yet voted): ~4s — the voter is staring
+ *  - WAITING (status draft/countdown, not yet voted): ~3s — the voter is staring
  *    at the lobby waiting for the flip, so detect `open` within a few seconds. A
  *    full room behind ONE venue NAT IP then produces well under ~25 req/s (verified
  *    safe; the ~700 req/s trip point is far away), and responses are cache hits.
@@ -44,10 +44,12 @@ import type { PollStatus } from "@/lib/types";
 /**
  * Cadence while WAITING for the open flip (status draft/countdown, not voted).
  * Fast so the lobby → cards transition lands within a few seconds when there is
- * no count-in. With a count-in the client flips locally at opens_at (instant),
- * so this is only the fallback/correction path.
+ * no count-in (manual open is the worst case: no opens_at to flip on locally).
+ * With a count-in the client flips locally at opens_at (instant), so this is
+ * only the fallback/correction path. Sits AT the 3s hard floor: jitter can only
+ * push ticks later (3–3.9s), which is exactly the safe-side behavior we want.
  */
-const BASE_INTERVAL_WAITING_MS = 4000;
+const BASE_INTERVAL_WAITING_MS = 3000;
 /** Cadence once OPEN but not yet voted: back off, only the close flip remains. */
 const BASE_INTERVAL_OPEN_MS = 8000;
 /**

@@ -79,14 +79,17 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
   const status = useLocalStatusFlip(baseStatus, opensAt, closesAt);
   const showNames = poll.showLegend ? SHOW_NAMES_DEFAULT : false;
 
-  // ANONYMOUS DISPLAY (presentation-only): while identities must stay secret
-  // (lobby + countdown + live), rewrite name/color to stable "Equipo A/B/…"
-  // rows keyed on the CONFIGURED team position (never the ranking, which would
-  // re-identify teams as bars swap). The reveal (closed) always receives the
-  // REAL teams — that is the whole point of the mode. Data flow (useLiveTally)
-  // is untouched; only the render props are masked.
+  // ANONYMOUS DISPLAY (presentation-only): identities hide ONLY while the vote
+  // is OPEN. The lobby (draft/countdown) shows the REAL teams — the room must
+  // see their team is in before voting starts — and the reveal (closed) always
+  // receives the REAL teams. During open, rows rewrite to identical "???"
+  // labels with indigo shades keyed on the CONFIGURED team position (never the
+  // ranking, which would re-identify teams as bars swap). This keys off the
+  // DERIVED `status` (local flip included), so a countdown→open local flip
+  // masks at the exact moment the poll opens, before any broadcast lands.
+  // Data flow (useLiveTally) is untouched; only the render props are masked.
   const positionById = useMemo(() => buildPositionIndex(teams), [teams]);
-  const anonymized = poll.anonymousDisplay && status !== "closed";
+  const anonymized = poll.anonymousDisplay && status === "open";
   const displayLiveTeams = useMemo(
     () =>
       anonymized ? anonymizeRankedTeams(live.teams, positionById) : live.teams,

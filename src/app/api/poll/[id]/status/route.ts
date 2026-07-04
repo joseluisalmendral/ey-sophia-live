@@ -36,6 +36,12 @@ const CACHE_CONTROL = "public, s-maxage=3, stale-while-revalidate=10";
 // otherwise a phone can keep showing vote buttons for up to s-maxage+swr seconds
 // after the admin closes, and its vote bounces with 'closed'.
 const CACHE_CONTROL_OPEN_MANUAL = "public, s-maxage=1, stale-while-revalidate=2";
+// PRE-OPEN (draft/countdown) is the other flip-critical window: voters are
+// staring at the lobby waiting for the open. A 3s+10s stale window could keep a
+// phone in the lobby up to ~13s after a manual open, so the CDN window shrinks
+// to 1s (+3s swr). Cost is still ~1 origin hit/s across the whole room — the
+// CDN keeps collapsing the fan-out; only the staleness ceiling drops.
+const CACHE_CONTROL_PRE_OPEN = "public, s-maxage=1, stale-while-revalidate=3";
 
 interface StatusRow {
   status: PollStatus;
@@ -69,7 +75,9 @@ export async function GET(
   const cacheControl =
     data.status === "open" && data.closes_at === null
       ? CACHE_CONTROL_OPEN_MANUAL
-      : CACHE_CONTROL;
+      : data.status === "draft" || data.status === "countdown"
+        ? CACHE_CONTROL_PRE_OPEN
+        : CACHE_CONTROL;
 
   return NextResponse.json(
     {

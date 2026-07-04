@@ -85,9 +85,10 @@ export const LobbyStage = memo(function LobbyStage({
     liveTeams.length > 0 ? liveTeams : teams;
 
   return (
-    <div className="relative grid h-full w-full grid-cols-[minmax(0,42%)_minmax(0,58%)] items-center gap-[clamp(1.5rem,4vw,4rem)] px-[clamp(1.5rem,4vw,4.5rem)] py-[clamp(1rem,3vh,2.5rem)] pb-[clamp(2.2rem,5vh,3.4rem)]">
-      {/* LEFT — join column */}
-      <div className="flex flex-col items-center gap-[clamp(1rem,2.4vh,2rem)] text-center">
+    <div className="relative grid h-full w-full grid-cols-[minmax(0,42%)_minmax(0,58%)] items-center gap-[clamp(1.5rem,3.5vw,3.5rem)] px-[clamp(1.5rem,3.5vw,4rem)] py-[clamp(1rem,3vh,2.5rem)] pb-[clamp(2.2rem,5vh,3.4rem)]">
+      {/* LEFT — join column. `justify-center` + the same vertical rhythm as the
+          right column keeps both blocks on one shared optical axis. */}
+      <div className="flex h-full flex-col items-center justify-center gap-[clamp(1rem,2.6vh,2.2rem)] text-center">
         {/* Count-in owns the top of the column while the poll is counting in. */}
         {showCountIn && (
           <motion.div
@@ -104,7 +105,13 @@ export const LobbyStage = memo(function LobbyStage({
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: durations.slow, ease: easings.decel }}
         >
-          <QrCode value={voterUrl} size={300} />
+          {/* Fluid QR: scales with the stage (viewport-capped) so it fills the
+              join column on a big projector without ever forcing scroll. */}
+          <QrCode
+            value={voterUrl}
+            size={320}
+            className="w-[min(clamp(280px,23vw,380px),46vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
+          />
         </motion.div>
 
         {/* The ONLY instruction under the QR — one clear step, gently pulsing. */}
@@ -116,7 +123,7 @@ export const LobbyStage = memo(function LobbyStage({
               ? { duration: durations.base }
               : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }
           }
-          className="font-display text-[clamp(1.1rem,1.8vw,1.6rem)] font-bold text-ey-yellow"
+          className="font-display text-[clamp(1.2rem,2vw,1.9rem)] font-bold text-ey-yellow"
         >
           Escanea para unirte
         </motion.span>
@@ -135,11 +142,11 @@ export const LobbyStage = memo(function LobbyStage({
               >
                 <span
                   ref={counterScope}
-                  className="inline-block font-display text-[clamp(2.4rem,4.4vw,4rem)] font-black text-power-green tabular-nums"
+                  className="inline-block font-display text-[clamp(2.6rem,4.8vw,4.6rem)] font-black text-power-green tabular-nums"
                 >
                   <CountUp value={joined} />
                 </span>
-                <span className="text-[clamp(0.9rem,1.3vw,1.2rem)] font-semibold uppercase tracking-[0.18em] text-text-dim">
+                <span className="text-[clamp(1rem,1.4vw,1.35rem)] font-semibold uppercase tracking-[0.18em] text-text-dim">
                   en la sala
                 </span>
               </motion.div>
@@ -149,25 +156,25 @@ export const LobbyStage = memo(function LobbyStage({
       </div>
 
       {/* RIGHT — teased finalists */}
-      <div className="flex h-full flex-col justify-center gap-[clamp(0.8rem,2vh,1.6rem)]">
+      <div className="flex h-full flex-col justify-center gap-[clamp(1rem,2.4vh,2rem)]">
         <motion.div
           initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: durations.slow, ease: easings.decel }}
-          className="flex items-center gap-3"
+          className="flex items-center gap-[clamp(0.8rem,1.4vw,1.2rem)]"
         >
-          <EyBeam surface="dark" size={40} label="" />
-          <div className="flex flex-col">
-            <h1 className="font-display text-[clamp(1.6rem,3vw,3rem)] font-black leading-none text-text">
+          <EyBeam surface="dark" size={52} label="" />
+          <div className="flex flex-col gap-[clamp(0.25rem,0.8vh,0.5rem)]">
+            <h1 className="font-display text-[clamp(1.9rem,3.4vw,3.5rem)] font-black leading-none text-text">
               {poll.title}
             </h1>
-            <span className="text-[clamp(0.8rem,1.2vw,1.1rem)] font-medium uppercase tracking-[0.22em] text-text-dim">
+            <span className="text-[clamp(0.9rem,1.35vw,1.25rem)] font-medium uppercase tracking-[0.22em] text-text-dim">
               {isCountdown ? "Preparados…" : "Los votos aparecen en cuanto abra la votación"}
             </span>
           </div>
         </motion.div>
 
-        <ul className="flex flex-col gap-[clamp(0.5rem,1.4vh,1rem)]">
+        <ul className="flex flex-col gap-[clamp(0.6rem,1.6vh,1.2rem)]">
           {cards.map((team, i) => (
             <motion.li
               key={team.id}
@@ -178,14 +185,14 @@ export const LobbyStage = memo(function LobbyStage({
                 duration: durations.base,
                 ease: easings.standard,
               }}
-              className="flex items-center gap-[clamp(0.6rem,1.4vw,1.2rem)] rounded-lg border border-white/8 bg-white/[0.03] px-[clamp(0.8rem,1.6vw,1.4rem)] py-[clamp(0.6rem,1.6vh,1.1rem)]"
+              className="flex items-center gap-[clamp(0.7rem,1.6vw,1.4rem)] rounded-lg border border-white/8 bg-white/[0.03] px-[clamp(0.9rem,1.8vw,1.6rem)] py-[clamp(0.7rem,1.9vh,1.35rem)]"
             >
               <TeamColorChip
                 color={team.color}
                 label={teamInitial(team.name)}
-                size={44}
+                size={52}
               />
-              <span className="flex-1 truncate font-display text-[clamp(1.1rem,2.2vw,2.2rem)] font-extrabold text-text">
+              <span className="flex-1 truncate font-display text-[clamp(1.25rem,2.5vw,2.5rem)] font-extrabold text-text">
                 {team.name}
               </span>
               <motion.span
@@ -195,7 +202,7 @@ export const LobbyStage = memo(function LobbyStage({
                     ? undefined
                     : { duration: 2.4, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 }
                 }
-                className="font-display text-[clamp(1.3rem,2.6vw,2.6rem)] font-black tabular-nums text-text-dim"
+                className="font-display text-[clamp(1.45rem,2.9vw,2.9rem)] font-black tabular-nums text-text-dim"
               >
                 0
               </motion.span>

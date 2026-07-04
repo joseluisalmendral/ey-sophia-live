@@ -126,11 +126,12 @@ export async function loadScreenData(
 
   // ANONYMOUS DISPLAY, server-side wall: ScreenClient props are serialized
   // into the page's RSC payload, so passing real names would leak them in the
-  // HTML source even if the render masks them. While identities must stay
-  // secret (any status before `closed`) the projector snapshot ships ALREADY
-  // anonymized. The reveal never needs these rows — it renders the runtime
-  // get_results data (real names), fetched after the close.
-  if (poll.anonymousDisplay && poll.status !== "closed") {
+  // HTML source even if the render masks them. Identities hide ONLY while the
+  // vote is OPEN — the lobby (draft/countdown) deliberately shows the real
+  // teams so the room can confirm theirs is in — so the snapshot ships
+  // anonymized only for `open`. The reveal never needs these rows — it renders
+  // the runtime get_results data (real names), fetched after the close.
+  if (poll.anonymousDisplay && poll.status === "open") {
     teams = anonymizeIdentities(teams, buildPositionIndex(teams));
   }
 
