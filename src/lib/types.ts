@@ -37,6 +37,12 @@ export interface Poll {
   durationSeconds: number | null;
   chartType: ChartType;
   showLegend: boolean;
+  /**
+   * Presentation-only: when true the projector hides team names/colors during
+   * lobby/countdown/open and reveals identities only in the final reveal.
+   * Voter and admin surfaces always see the real identities.
+   */
+  anonymousDisplay: boolean;
   tieRule: TieRule;
   /** Short, memorable join code shown on the projector. */
   joinCode: string;

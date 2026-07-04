@@ -7,6 +7,7 @@ import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { springs } from "@/lib/motion/tokens";
 import { pickTextOn } from "@/lib/utils/contrast";
 import { adaptiveBarWidthPct } from "./chartScale";
+import { teamInitial } from "./anonymize";
 import type { RankedTeam } from "@/lib/types";
 
 /**
@@ -113,7 +114,7 @@ export const BarRace = memo(function BarRace({
                   <span className="flex min-w-0 items-center gap-[clamp(0.4rem,0.9vw,0.8rem)] pl-[clamp(0.6rem,1.2vw,1.1rem)]">
                     <TeamColorChip
                       color={team.color}
-                      label={team.name.charAt(0).toUpperCase()}
+                      label={teamInitial(team.name)}
                       size={28}
                     />
                     {showNames && (

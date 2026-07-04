@@ -42,6 +42,7 @@ export interface PollFormInput {
   chartType: ChartType;
   showLegend: boolean;
   showNames: boolean;
+  anonymousDisplay: boolean;
   tieRule: TieRule;
   teams: TeamInput[];
 }
@@ -90,6 +91,7 @@ export async function createPoll(input: PollFormInput): Promise<ActionResult> {
       chart_type: input.chartType,
       show_legend: input.showLegend,
       show_names: input.showNames,
+      anonymous_display: input.anonymousDisplay,
       tie_rule: input.tieRule,
       status: "draft",
     })
@@ -138,6 +140,7 @@ export async function updatePoll(input: PollFormInput): Promise<ActionResult> {
       chart_type: input.chartType,
       show_legend: input.showLegend,
       show_names: input.showNames,
+      anonymous_display: input.anonymousDisplay,
       tie_rule: input.tieRule,
     })
     .eq("id", input.id);

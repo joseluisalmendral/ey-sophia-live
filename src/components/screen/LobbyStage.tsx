@@ -9,6 +9,7 @@ import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { EyBeam } from "@/components/brand/EyBeam";
 import { durations, easings } from "@/lib/motion/tokens";
 import { useLobbyJoins } from "./useLobbyJoins";
+import { teamInitial } from "./anonymize";
 import type { Poll, RankedTeam, Team } from "@/lib/types";
 
 /**
@@ -181,7 +182,7 @@ export const LobbyStage = memo(function LobbyStage({
             >
               <TeamColorChip
                 color={team.color}
-                label={team.name.charAt(0).toUpperCase()}
+                label={teamInitial(team.name)}
                 size={44}
               />
               <span className="flex-1 truncate font-display text-[clamp(1.1rem,2.2vw,2.2rem)] font-extrabold text-text">

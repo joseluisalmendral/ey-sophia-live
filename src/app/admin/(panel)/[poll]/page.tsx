@@ -41,6 +41,7 @@ export default async function PollWorkspacePage({
     chartType: poll.chartType,
     showLegend: poll.showLegend,
     showNames: poll.showNames,
+    anonymousDisplay: poll.anonymousDisplay,
     tieRule: poll.tieRule,
     teams: teams.map((t) => ({ id: t.id, name: t.name, color: t.color })),
     // Teams + code are locked once a poll leaves draft (avoid altering a live event).

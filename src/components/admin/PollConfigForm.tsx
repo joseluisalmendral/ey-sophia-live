@@ -45,6 +45,7 @@ export interface PollConfigInitial {
   chartType: ChartType;
   showLegend: boolean;
   showNames: boolean;
+  anonymousDisplay: boolean;
   tieRule: TieRule;
   teams: TeamDraft[];
   /** Locked when the poll is no longer a draft (teams/code shouldn't change mid-event). */
@@ -87,6 +88,9 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
   const [chartType, setChartType] = useState<ChartType>(initial.chartType);
   const [showLegend, setShowLegend] = useState(initial.showLegend);
   const [showNames, setShowNames] = useState(initial.showNames);
+  const [anonymousDisplay, setAnonymousDisplay] = useState(
+    initial.anonymousDisplay,
+  );
   const [tieRule, setTieRule] = useState<TieRule>(initial.tieRule);
   const [teams, setTeams] = useState<TeamDraft[]>(
     initial.teams.length > 0
@@ -166,6 +170,7 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
       chartType,
       showLegend,
       showNames,
+      anonymousDisplay,
       tieRule,
       teams: teams.map((t) => ({ id: t.id, name: t.name, color: t.color })),
     };
@@ -378,6 +383,24 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
           Mostrar nombres de equipos
         </label>
       </div>
+
+      {/* Anonymous display: presentation-only, editable at any status (it does
+          not touch votes). The projector applies it on its next page load. */}
+      <label className="flex items-start gap-2.5 text-small text-text">
+        <input
+          type="checkbox"
+          checked={anonymousDisplay}
+          onChange={(e) => setAnonymousDisplay(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-[var(--color-ey-yellow)]"
+        />
+        <span className="flex flex-col gap-0.5">
+          Proceso anónimo
+          <span className="text-micro text-text-dim">
+            La pantalla oculta nombres y colores durante la votación; los
+            equipos se revelan al final.
+          </span>
+        </span>
+      </label>
 
       {error && (
         <p role="alert" className="text-small text-[#FF9E9E]">

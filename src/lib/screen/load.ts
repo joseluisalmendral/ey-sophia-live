@@ -1,5 +1,9 @@
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import {
+  anonymizeIdentities,
+  buildPositionIndex,
+} from "@/components/screen/anonymize";
 import type { Poll, PollStatus, Team } from "@/lib/types";
 
 /**
@@ -30,6 +34,7 @@ interface PollRow {
   duration_seconds: number | null;
   chart_type: Poll["chartType"];
   show_legend: boolean;
+  anonymous_display: boolean;
   tie_rule: Poll["tieRule"];
   join_code: string;
   created_at: string;
@@ -52,6 +57,7 @@ function mapPoll(r: PollRow): Poll {
     durationSeconds: r.duration_seconds,
     chartType: r.chart_type,
     showLegend: r.show_legend,
+    anonymousDisplay: r.anonymous_display,
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
@@ -94,7 +100,7 @@ export async function loadScreenData(
   const { data: pollData, error: pollErr } = await supabase
     .from("polls")
     .select(
-      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, tie_rule, join_code, created_at",
+      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at",
     )
     .eq(column, value)
     .maybeSingle<PollRow>();
@@ -105,15 +111,28 @@ export async function loadScreenData(
 
   const { data: teamRows } = await supabase
     .from("teams")
-    .select("id, poll_id, name, color")
-    .eq("poll_id", poll.id);
+    .select("id, poll_id, name, color, position")
+    .eq("poll_id", poll.id)
+    // Stable configured order: the anonymous-display mapping ("Equipo A/B/…")
+    // is keyed off this order, so it must be team position, never insertion.
+    .order("position", { ascending: true });
 
-  const teams: Team[] = (teamRows ?? []).map((t: TeamRow) => ({
+  let teams: Team[] = (teamRows ?? []).map((t: TeamRow) => ({
     id: t.id,
     pollId: t.poll_id,
     name: t.name,
     color: t.color,
   }));
+
+  // ANONYMOUS DISPLAY, server-side wall: ScreenClient props are serialized
+  // into the page's RSC payload, so passing real names would leak them in the
+  // HTML source even if the render masks them. While identities must stay
+  // secret (any status before `closed`) the projector snapshot ships ALREADY
+  // anonymized. The reveal never needs these rows — it renders the runtime
+  // get_results data (real names), fetched after the close.
+  if (poll.anonymousDisplay && poll.status !== "closed") {
+    teams = anonymizeIdentities(teams, buildPositionIndex(teams));
+  }
 
   const origin = await resolveOrigin();
   const voterUrl = `${origin}/vote/${poll.joinCode}`;

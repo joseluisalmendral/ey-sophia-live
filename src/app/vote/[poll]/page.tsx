@@ -29,6 +29,7 @@ interface PollRow {
   duration_seconds: number | null;
   chart_type: Poll["chartType"];
   show_legend: boolean;
+  anonymous_display: boolean;
   tie_rule: Poll["tieRule"];
   join_code: string;
   created_at: string;
@@ -52,6 +53,8 @@ function mapPoll(r: PollRow): Poll {
     durationSeconds: r.duration_seconds,
     chartType: r.chart_type,
     showLegend: r.show_legend,
+    // Voters always see real identities; carried only for the shared Poll type.
+    anonymousDisplay: r.anonymous_display,
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
@@ -92,7 +95,7 @@ export default async function VotePage({
   const { data: pollData, error: pollErr } = await supabase
     .from("polls")
     .select(
-      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, tie_rule, join_code, created_at, run_seq",
+      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at, run_seq",
     )
     .eq(column, value)
     .maybeSingle<PollRow>();

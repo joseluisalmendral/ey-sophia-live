@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { ChartType, PollStatus, Team, TieRule } from "@/lib/types";
+import type { RunAnalytics } from "@/components/admin/AnalyticsDashboard";
 
 /**
  * Server-side admin data access. The admin reads through the authenticated SSR
@@ -21,6 +22,7 @@ export interface AdminPoll {
   chartType: ChartType;
   showLegend: boolean;
   showNames: boolean;
+  anonymousDisplay: boolean;
   tieRule: TieRule;
   joinCode: string;
   createdAt: string;
@@ -37,13 +39,14 @@ interface AdminPollRow {
   chart_type: ChartType;
   show_legend: boolean;
   show_names: boolean;
+  anonymous_display: boolean;
   tie_rule: TieRule;
   join_code: string;
   created_at: string;
 }
 
 const POLL_COLUMNS =
-  "id, title, status, countdown_seconds, duration_seconds, opens_at, closes_at, chart_type, show_legend, show_names, tie_rule, join_code, created_at";
+  "id, title, status, countdown_seconds, duration_seconds, opens_at, closes_at, chart_type, show_legend, show_names, anonymous_display, tie_rule, join_code, created_at";
 
 function mapPoll(r: AdminPollRow): AdminPoll {
   return {
@@ -57,6 +60,7 @@ function mapPoll(r: AdminPollRow): AdminPoll {
     chartType: r.chart_type,
     showLegend: r.show_legend,
     showNames: r.show_names,
+    anonymousDisplay: r.anonymous_display,
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
@@ -117,6 +121,12 @@ export interface PollRun {
   endedAt: string;
   totalVotes: number;
   results: PollRunResult[];
+  /**
+   * Detailed analytics snapshot taken by relaunch_poll before wiping votes
+   * (get_poll_analytics doc + run_seq + joins curve). NULL for runs archived
+   * before migration 20260704130000.
+   */
+  analytics: RunAnalytics | null;
 }
 
 interface PollRunRow {
@@ -133,6 +143,7 @@ interface PollRunRow {
     position: number;
     count: number;
   }[];
+  analytics: RunAnalytics | null;
 }
 
 /** Archived runs for a poll, newest first. RLS: admin-only. */
@@ -140,7 +151,7 @@ export async function listRuns(pollId: string): Promise<PollRun[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("poll_runs")
-    .select("id, seq, label, started_at, ended_at, total_votes, results")
+    .select("id, seq, label, started_at, ended_at, total_votes, results, analytics")
     .eq("poll_id", pollId)
     .order("seq", { ascending: false });
   return ((data ?? []) as PollRunRow[]).map((r) => ({
@@ -157,6 +168,7 @@ export async function listRuns(pollId: string): Promise<PollRun[]> {
       position: t.position,
       count: t.count,
     })),
+    analytics: r.analytics ?? null,
   }));
 }
 

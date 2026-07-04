@@ -21,6 +21,7 @@ export default function NewPollPage() {
     chartType: "bar_race",
     showLegend: true,
     showNames: true,
+    anonymousDisplay: false,
     tieRule: "first_to_count",
     teams: [
       { name: "", color: "#FFE600" },

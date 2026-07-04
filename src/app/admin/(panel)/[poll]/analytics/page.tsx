@@ -1,17 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import {
-  AnalyticsDashboard,
-  type AnalyticsData,
+import type {
+  AnalyticsData,
+  JoinCurve,
 } from "@/components/admin/AnalyticsDashboard";
+import { AnalyticsView } from "@/components/admin/AnalyticsView";
+import { listRuns } from "../../poll-data";
 
 /**
  * Analytics — /admin/[poll]/analytics
  *
- * Calls the is_admin()-gated, SECURITY DEFINER RPC get_poll_analytics, which
- * returns ONLY aggregates (no PII, no raw votes). Renders headline stats +
- * ECharts (votes-over-time + per-team). Friendly for reviewing past polls.
+ * Per-launch analytics. The CURRENT run comes from the live is_admin()-gated
+ * RPCs (get_poll_analytics + get_lobby_join_curve); archived runs come from
+ * the analytics snapshot relaunch_poll froze into poll_runs.analytics. All
+ * documents are aggregates only — no PII, no raw votes, no aliases.
  */
 
 export const dynamic = "force-dynamic";
@@ -24,16 +27,25 @@ export default async function AnalyticsPage({
   const { poll: pollId } = await params;
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("get_poll_analytics", {
-    p_poll_id: pollId,
-  });
+  const [analyticsRes, joinsRes, seqRes, runs] = await Promise.all([
+    supabase.rpc("get_poll_analytics", { p_poll_id: pollId }),
+    supabase.rpc("get_lobby_join_curve", { p_poll_id: pollId }),
+    supabase
+      .from("polls")
+      .select("run_seq")
+      .eq("id", pollId)
+      .maybeSingle<{ run_seq: number }>(),
+    listRuns(pollId),
+  ]);
 
-  if (error || !data) {
+  if (analyticsRes.error || !analyticsRes.data) {
     // not_authorized is already prevented by the layout; a missing poll 404s.
     notFound();
   }
 
-  const analytics = data as AnalyticsData;
+  const analytics = analyticsRes.data as AnalyticsData;
+  const liveJoins = (joinsRes.data as JoinCurve | null) ?? null;
+  const currentSeq = seqRes.data?.run_seq ?? 1;
 
   return (
     <div>
@@ -49,7 +61,12 @@ export default async function AnalyticsPage({
         </h1>
         <p className="mt-1 text-small text-text-dim">{analytics.title}</p>
       </div>
-      <AnalyticsDashboard data={analytics} />
+      <AnalyticsView
+        live={analytics}
+        liveJoins={liveJoins}
+        currentSeq={currentSeq}
+        runs={runs}
+      />
     </div>
   );
 }

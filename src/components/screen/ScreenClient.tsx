@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ShaderBackground } from "@/components/providers/ShaderBackground";
 import { CodeBadge } from "@/components/atoms/CodeBadge";
@@ -12,6 +12,11 @@ import { useLocalStatusFlip } from "@/lib/polling/useLocalStatusFlip";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import { durations, easings } from "@/lib/motion/tokens";
 import type { Poll, PollStatus, Team } from "@/lib/types";
+import {
+  anonymizeIdentities,
+  anonymizeRankedTeams,
+  buildPositionIndex,
+} from "./anonymize";
 import { BarRace } from "./BarRace";
 import { ChartView } from "./ChartView";
 import { LobbyStage } from "./LobbyStage";
@@ -73,6 +78,24 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
   // Forward-only; the realtime `status` broadcast remains the authority.
   const status = useLocalStatusFlip(baseStatus, opensAt, closesAt);
   const showNames = poll.showLegend ? SHOW_NAMES_DEFAULT : false;
+
+  // ANONYMOUS DISPLAY (presentation-only): while identities must stay secret
+  // (lobby + countdown + live), rewrite name/color to stable "Equipo A/B/…"
+  // rows keyed on the CONFIGURED team position (never the ranking, which would
+  // re-identify teams as bars swap). The reveal (closed) always receives the
+  // REAL teams — that is the whole point of the mode. Data flow (useLiveTally)
+  // is untouched; only the render props are masked.
+  const positionById = useMemo(() => buildPositionIndex(teams), [teams]);
+  const anonymized = poll.anonymousDisplay && status !== "closed";
+  const displayLiveTeams = useMemo(
+    () =>
+      anonymized ? anonymizeRankedTeams(live.teams, positionById) : live.teams,
+    [anonymized, live.teams, positionById],
+  );
+  const displayTeams = useMemo(
+    () => (anonymized ? anonymizeIdentities(teams, positionById) : teams),
+    [anonymized, teams, positionById],
+  );
 
   // Graceful guard: a misconfigured poll (no teams) must never render a broken
   // race/donut/podium. Show a calm "in preparation" board instead. Uses the SSR
@@ -140,8 +163,8 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                 <StageWrap key="lobby" reduced={reduced}>
                   <LobbyStage
                     poll={poll}
-                    teams={teams}
-                    liveTeams={live.teams}
+                    teams={displayTeams}
+                    liveTeams={displayLiveTeams}
                     voterUrl={voterUrl}
                     isCountdown={status === "countdown"}
                     opensAt={opensAt}
@@ -155,8 +178,9 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
                   <LiveStage
                     poll={poll}
                     voterUrl={voterUrl}
-                    liveTeams={live.teams}
+                    liveTeams={displayLiveTeams}
                     showNames={showNames}
+                    anonymized={anonymized}
                     closesAt={closesAt}
                     reduced={reduced}
                   />
@@ -222,6 +246,7 @@ const LiveStage = memo(function LiveStage({
   voterUrl,
   liveTeams,
   showNames,
+  anonymized,
   closesAt,
   reduced,
 }: {
@@ -229,6 +254,8 @@ const LiveStage = memo(function LiveStage({
   voterUrl: string;
   liveTeams: ReturnType<typeof useLiveTally>["teams"];
   showNames: boolean;
+  /** Anonymous-display run: rows are already masked; adds the suspense badge. */
+  anonymized: boolean;
   closesAt: string | null;
   reduced: boolean;
 }) {
@@ -263,6 +290,25 @@ const LiveStage = memo(function LiveStage({
 
       {/* Visualization */}
       <div className="flex h-full min-h-0 flex-col justify-center">
+        {/* Suspense badge: discreet but visible — the audience must know the
+            hidden identities are intentional drama, not a rendering glitch. */}
+        {anonymized && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: durations.base }}
+            className="mb-[clamp(0.5rem,1.4vh,1rem)] flex items-center justify-center gap-2"
+          >
+            <span
+              aria-hidden
+              className="inline-block h-2 w-2 rounded-full bg-sophia-accent"
+              style={{ boxShadow: "0 0 12px var(--color-sophia-accent)" }}
+            />
+            <span className="font-display text-[clamp(0.75rem,1.2vw,1.1rem)] font-bold uppercase tracking-[0.24em] text-text-dim">
+              Identidades ocultas — se revelan al final
+            </span>
+          </motion.div>
+        )}
         {isDivRace ? (
           <BarRace teams={liveTeams} showNames={showNames} reduced={reduced} />
         ) : (
