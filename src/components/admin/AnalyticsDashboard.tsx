@@ -50,12 +50,39 @@ export interface AnalyticsData {
   peak: { bucket: number; t: string; count: number } | null;
 }
 
+/** Lobby joins-over-time aggregate from get_lobby_join_curve. */
+export interface JoinCurve {
+  poll_id: string;
+  run_seq: number;
+  bucket_seconds: number;
+  total_joins: number;
+  first_join: string | null;
+  last_join: string | null;
+  buckets: Bucket[];
+}
+
+/**
+ * Analytics snapshot stored in poll_runs.analytics by relaunch_poll:
+ * the get_poll_analytics doc plus the archived run_seq and its join curve.
+ */
+export interface RunAnalytics extends AnalyticsData {
+  run_seq: number;
+  joins: JoinCurve | null;
+}
+
 const AXIS_COLOR = "#747480"; // ey-gray1
 const TEXT_COLOR = "#C4C4CD"; // ey-gray2
 const GRID_COLOR = "rgba(255,255,255,0.06)";
 const YELLOW = "#FFE600";
 
-export function AnalyticsDashboard({ data }: { data: AnalyticsData }) {
+export function AnalyticsDashboard({
+  data,
+  joins = null,
+}: {
+  data: AnalyticsData;
+  /** Lobby join curve for the same run (live RPC or archived snapshot). */
+  joins?: JoinCurve | null;
+}) {
   const overTimeOption = useMemo(() => {
     const cats = data.buckets.map((b) => `${b.bucket * data.bucket_seconds}s`);
     const vals = data.buckets.map((b) => b.count);
@@ -154,6 +181,48 @@ export function AnalyticsDashboard({ data }: { data: AnalyticsData }) {
     };
   }, [data]);
 
+  const joinsOption = useMemo(() => {
+    if (!joins || joins.buckets.length === 0) return null;
+    const cats = joins.buckets.map(
+      (b) => `${b.bucket * joins.bucket_seconds}s`,
+    );
+    const vals = joins.buckets.map((b) => b.count);
+    return {
+      backgroundColor: "transparent",
+      grid: { left: 44, right: 16, top: 24, bottom: 32 },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        backgroundColor: "#20202c",
+        borderColor: "rgba(255,255,255,0.1)",
+        textStyle: { color: "#F6F6FA" },
+      },
+      xAxis: {
+        type: "category",
+        data: cats,
+        axisLine: { lineStyle: { color: AXIS_COLOR } },
+        axisLabel: { color: TEXT_COLOR },
+      },
+      yAxis: {
+        type: "value",
+        minInterval: 1,
+        splitLine: { lineStyle: { color: GRID_COLOR } },
+        axisLabel: { color: TEXT_COLOR },
+      },
+      series: [
+        {
+          type: "bar",
+          data: vals,
+          barWidth: "60%",
+          itemStyle: {
+            color: "rgba(255,230,0,0.65)",
+            borderRadius: [4, 4, 0, 0],
+          },
+        },
+      ],
+    };
+  }, [joins]);
+
   const peakLabel = data.peak
     ? `${data.peak.bucket * data.bucket_seconds}s`
     : "—";
@@ -225,6 +294,31 @@ export function AnalyticsDashboard({ data }: { data: AnalyticsData }) {
             </ul>
           </Panel>
         </>
+      )}
+
+      {joins && (
+        <Panel title="Uniones al lobby">
+          <p className="mb-3 text-small text-text-dim">
+            {joins.total_joins > 0 ? (
+              <>
+                <span className="tabular-nums text-text">
+                  {joins.total_joins}
+                </span>{" "}
+                uniones en total, en intervalos de {joins.bucket_seconds}s
+                desde la primera unión.
+              </>
+            ) : (
+              "Este lanzamiento no registró uniones al lobby."
+            )}
+          </p>
+          {joinsOption && (
+            <ReactECharts
+              option={joinsOption}
+              style={{ height: 240 }}
+              opts={{ renderer: "svg" }}
+            />
+          )}
+        </Panel>
       )}
     </div>
   );

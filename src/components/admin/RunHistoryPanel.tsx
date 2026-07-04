@@ -96,6 +96,14 @@ function RunCard({ pollTitle, run }: { pollTitle: string; run: PollRun }) {
         <span className="inline-flex h-8 items-center rounded-md bg-surface px-3 font-mono text-small text-text-dim">
           #{run.seq}
         </span>
+        {run.analytics && (
+          <span
+            title="Este lanzamiento guardó analíticas detalladas"
+            className="inline-flex h-8 items-center rounded-md border border-ey-yellow/30 bg-ey-yellow/10 px-3 text-small text-ey-yellow"
+          >
+            Analíticas
+          </span>
+        )}
         <input
           type="text"
           value={label}
