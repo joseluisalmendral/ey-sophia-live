@@ -37,11 +37,13 @@ const CACHE_CONTROL = "public, s-maxage=3, stale-while-revalidate=10";
 // after the admin closes, and its vote bounces with 'closed'.
 const CACHE_CONTROL_OPEN_MANUAL = "public, s-maxage=1, stale-while-revalidate=2";
 // PRE-OPEN (draft/countdown) is the other flip-critical window: voters are
-// staring at the lobby waiting for the open. A 3s+10s stale window could keep a
-// phone in the lobby up to ~13s after a manual open, so the CDN window shrinks
-// to 1s (+3s swr). Cost is still ~1 origin hit/s across the whole room — the
-// CDN keeps collapsing the fan-out; only the staleness ceiling drops.
-const CACHE_CONTROL_PRE_OPEN = "public, s-maxage=1, stale-while-revalidate=3";
+// staring at the lobby waiting for the open. NO stale-while-revalidate here:
+// with swr the CDN may serve a response up to s-maxage+swr old, which added up
+// to 4s of staleness to a manual open. Dropping swr caps staleness at 1s while
+// the CDN still collapses the room's fan-out to ~1 origin hit/s per PoP — the
+// only cost is that the revalidation request blocks (~100-300ms) instead of
+// being served stale, which is exactly the tradeoff we want in the lobby.
+const CACHE_CONTROL_PRE_OPEN = "public, s-maxage=1";
 
 interface StatusRow {
   status: PollStatus;

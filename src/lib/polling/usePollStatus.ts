@@ -16,10 +16,11 @@ import type { PollStatus } from "@/lib/types";
  * never an attack). The cadence is STATUS-AWARE so open-detection is fast without
  * ever approaching Vercel's DDoS threshold (all responses are CDN-cached, so a
  * whole room collapses to ~1 origin hit / s-maxage window regardless):
- *  - WAITING (status draft/countdown, not yet voted): ~3s — the voter is staring
- *    at the lobby waiting for the flip, so detect `open` within a few seconds. A
- *    full room behind ONE venue NAT IP then produces well under ~25 req/s (verified
- *    safe; the ~700 req/s trip point is far away), and responses are cache hits.
+ *  - WAITING (status draft/countdown, not yet voted): ~2.5s (own 2s floor) — the
+ *    voter is staring at the lobby waiting for the flip, so detect `open` within
+ *    a couple of seconds. A full room behind ONE venue NAT IP produces ~100 req/s
+ *    worst case (the ~700 req/s trip point is far away), and responses are cache
+ *    hits against the 1s pre-open CDN window.
  *  - OPEN, not yet voted: ~8s — the vote cards are up; they only need the close
  *    flip now, so back off.
  *  - AFTER voting: ~20s — they only await close/reveal and watch the big screen.
@@ -27,7 +28,8 @@ import type { PollStatus } from "@/lib/types";
  *    together does not fire one synchronized same-IP burst.
  *  - ±30% random jitter per tick so phones that loaded together do not sync into
  *    a thundering herd hitting the origin on the same second.
- *  - A hard floor: never schedule a request sooner than MIN_INTERVAL_MS (3s).
+ *  - A hard floor: never schedule a request sooner than MIN_INTERVAL_MS (3s),
+ *    except the pre-open lobby which uses its own 2s floor (MIN_INTERVAL_WAITING_MS).
  *  - Exponential backoff on fetch error (capped), so a flaky network backs off
  *    instead of hammering.
  *  - AbortController + an in-flight guard: requests never overlap.
@@ -46,10 +48,11 @@ import type { PollStatus } from "@/lib/types";
  * Fast so the lobby → cards transition lands within a few seconds when there is
  * no count-in (manual open is the worst case: no opens_at to flip on locally).
  * With a count-in the client flips locally at opens_at (instant), so this is
- * only the fallback/correction path. Sits AT the 3s hard floor: jitter can only
- * push ticks later (3–3.9s), which is exactly the safe-side behavior we want.
+ * only the fallback/correction path. Uses its own lower floor (see
+ * MIN_INTERVAL_WAITING_MS): 2.5s ±30% → 2–3.25s per tick. At ~250 phones that
+ * is <110 req/s, virtually all CDN hits — far below the ~700 req/s trip point.
  */
-const BASE_INTERVAL_WAITING_MS = 3000;
+const BASE_INTERVAL_WAITING_MS = 2500;
 /** Cadence once OPEN but not yet voted: back off, only the close flip remains. */
 const BASE_INTERVAL_OPEN_MS = 8000;
 /**
@@ -69,6 +72,13 @@ const BASE_INTERVAL_AFTER_MS = 20000;
 const BASE_INTERVAL_CLOSED_MS = 20000;
 /** Hard floor — a scheduled tick is never sooner than this, jitter included. */
 const MIN_INTERVAL_MS = 3000;
+/**
+ * Lower floor ONLY for the pre-open WAITING cadence: the lobby is the one
+ * moment where open-detection latency is the product, and the pre-open response
+ * is CDN-cached with s-maxage=1, so a 2s floor stays comfortably inside the
+ * abuse-safety envelope (responses collapse at the CDN; origin sees ~1 req/s).
+ */
+const MIN_INTERVAL_WAITING_MS = 2000;
 /** ±30% jitter to desync the room. */
 const JITTER_RATIO = 0.3;
 /** Backoff cap on repeated fetch errors. */
@@ -107,12 +117,12 @@ export interface UsePollStatusResult {
   ready: boolean;
 }
 
-/** Random interval in [base*(1-r), base*(1+r)], never below the hard floor. */
-function jittered(base: number): number {
+/** Random interval in [base*(1-r), base*(1+r)], never below the given floor. */
+function jittered(base: number, floor: number = MIN_INTERVAL_MS): number {
   const min = base * (1 - JITTER_RATIO);
   const max = base * (1 + JITTER_RATIO);
   const value = min + Math.random() * (max - min);
-  return Math.max(MIN_INTERVAL_MS, value);
+  return Math.max(floor, value);
 }
 
 export function usePollStatus(
@@ -191,7 +201,8 @@ export function usePollStatus(
             ? BASE_INTERVAL_OPEN_MANUAL_MS
             : BASE_INTERVAL_OPEN_MS;
       } else {
-        base = BASE_INTERVAL_WAITING_MS;
+        // Pre-open lobby: the one cadence allowed below the global 3s floor.
+        return jittered(BASE_INTERVAL_WAITING_MS, MIN_INTERVAL_WAITING_MS);
       }
       return jittered(base);
     };
