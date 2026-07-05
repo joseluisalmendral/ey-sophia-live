@@ -109,8 +109,8 @@ export const LobbyStage = memo(function LobbyStage({
               join column on a big projector without ever forcing scroll. */}
           <QrCode
             value={voterUrl}
-            size={320}
-            className="w-[min(clamp(280px,23vw,380px),46vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
+            size={400}
+            className="w-[min(clamp(320px,26vw,500px),58vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
           />
         </motion.div>
 
