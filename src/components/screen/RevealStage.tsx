@@ -10,6 +10,7 @@ import { resolveReveal, type RevealOutcome } from "./winner";
 import { ColorHint } from "./reveal/ColorHint";
 import { NameTease } from "./reveal/NameTease";
 import { Curtain } from "./reveal/Curtain";
+import { CameraCuts } from "./reveal/CameraCuts";
 import { REVEAL_BEATS, REVEAL_BEATS_REDUCED } from "./reveal/constants";
 import type { RankedTeam, TieRule } from "@/lib/types";
 
@@ -26,21 +27,24 @@ import type { RankedTeam, TieRule } from "@/lib/types";
  *   (e) TELÓN     — a 3D theatre curtain slams shut: EY SophIA (IA in purple) on
  *       the left panel, thePower on the right, gold seam, roaming sheen,
  *       "Y el equipo ganador es…" pulsing on the join.
- *   (f) PODIUM    — the curtain swings open (rotateY, hinged at screen edges)
- *       onto the existing podium climax: rise + crown + confetti edge-burst +
- *       WebAudio sting + ~4s fireworks finale that STOPS.
+ *   (f) CAMERAS   — the curtain swings open onto PURE BLACK and a videogame-style
+ *       champion presentation: 3 hard camera cuts (low-angle monolith, lateral
+ *       dolly, frontal hero) with cinematic letterbox. The winner sting fires on
+ *       the hero cut. See reveal/CameraCuts.tsx.
+ *   (g) PODIUM    — letterbox retracts onto the podium climax: rise + crown +
+ *       confetti edge-burst + ~4s fireworks finale that STOPS.
  *
- * Timings live in reveal/constants.ts (~17s full arc, ~7.5s reduced).
+ * Timings live in reveal/constants.ts (~22s full arc, ~7.5s reduced).
  *
- * Zero votes: hint + name-tease beats are skipped (no winner to tease); the
+ * Zero votes: hint + name-tease + camera beats are skipped (no winner); the
  * curtain still opens onto the designed "Sin votos esta vez" state.
- * Ties: resolveReveal() decides double_crown; hint/tease/podium all render both
- * co-winners. Reduced motion: same beats, compressed, crossfades only, no
- * confetti/fireworks/audio. The `ready` gate is unchanged: nothing starts until
- * the initial absolute tally has resolved.
+ * Ties: resolveReveal() decides double_crown; hint/tease/cameras/podium all
+ * render both co-winners. Reduced motion: same beats minus the camera cuts,
+ * compressed, crossfades only, no confetti/fireworks/audio. The `ready` gate is
+ * unchanged: nothing starts until the initial absolute tally has resolved.
  */
 
-type Beat = "suspense" | "hint" | "name" | "curtain" | "podium";
+type Beat = "suspense" | "hint" | "name" | "curtain" | "cameras" | "podium";
 
 export interface RevealStageProps {
   teams: RankedTeam[];
@@ -129,22 +133,34 @@ function useRevealChoreography(
       await wait(t.curtainHold * 1000);
       if (cancelled) return;
 
-      // Beat (f) PODIUM — the curtain's AnimatePresence exit IS the opening.
-      setBeat("podium");
-
       if (!reduced && hasWinner) {
-        // Confetti edge-burst once the curtain is open and the plinths land.
-        await wait(t.curtainOpen * 1000 + 500);
+        // Beat (f) CAMERAS — curtain opens onto black + 3 videogame-style cuts.
+        setBeat("cameras");
+        await wait((t.camLow + t.camDolly) * 1000);
         if (cancelled) return;
-        void fireConfettiBurst();
 
-        // WebAudio triumphant sting at the crown/confetti beat (best-effort).
+        // The winner sting lands ON the hero cut (cut 3) — the musical hit and
+        // the hardest visual edit share the same frame.
         if (!mutedRef.current) {
           stingRef.current = playWinnerSting();
         }
+        await wait(t.camHero * 1000);
+        if (cancelled) return;
+
+        // Beat (g) PODIUM — letterbox retracts onto the full climax.
+        setBeat("podium");
+
+        // Confetti edge-burst once the plinths land.
+        await wait(600);
+        if (cancelled) return;
+        void fireConfettiBurst();
 
         // Sustained fireworks finale: airburst shells on an interval, then STOP.
         stopFireworks = startFireworksFinale(durations.fireworks * 1000);
+      } else {
+        // Reduced motion or zero votes: no camera cuts — the curtain's
+        // AnimatePresence exit opens straight onto the podium / no-votes state.
+        setBeat("podium");
       }
     };
     void run();
@@ -249,7 +265,7 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
           </motion.div>
         )}
 
-        {(beat === "curtain" || beat === "podium") && (
+        {(beat === "curtain" || beat === "cameras" || beat === "podium") && (
           <motion.div
             key="climax"
             initial={{ opacity: 0 }}
@@ -264,6 +280,17 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
               ) : (
                 <Podium outcome={outcome} reduced={reduced} />
               ))}
+
+            {/* CAMERAS beat: pure black + 3 videogame-style cuts behind the
+                opening curtain; its exit retracts the letterbox onto the podium. */}
+            <AnimatePresence>
+              {beat === "cameras" && (
+                <CameraCuts
+                  winners={outcome.winners}
+                  timings={reduced ? REVEAL_BEATS_REDUCED : REVEAL_BEATS}
+                />
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>

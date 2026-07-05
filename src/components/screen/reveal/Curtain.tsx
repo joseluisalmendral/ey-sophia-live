@@ -50,20 +50,20 @@ export function Curtain({ reduced, openSeconds }: CurtainProps) {
     >
       {/* LEFT panel — EY SophIA */}
       <CurtainPanel side="left" reduced={reduced} close={closeTransition} open={openTransition}>
-        <div className="flex flex-col items-center gap-4">
-          <EyBeam surface="dark" size={72} label="EY" />
-          <span className="font-display text-[clamp(2.2rem,5vw,4.5rem)] font-extrabold leading-none tracking-tight text-text">
+        <div className="flex flex-col items-center gap-6">
+          <EyBeam surface="dark" size={116} label="EY" />
+          <span className="font-display text-[clamp(3.2rem,7.5vw,7rem)] font-extrabold leading-none tracking-tight text-text">
             Soph<span className="text-sophia-accent glow-sophia">IA</span>
           </span>
         </div>
       </CurtainPanel>
 
       <CurtainPanel side="right" reduced={reduced} close={closeTransition} open={openTransition}>
-        <div className="flex flex-col items-center gap-3">
-          <span className="inline-flex items-center rounded-[16px] bg-white px-5 py-3.5 shadow-[0_2px_10px_rgba(0,0,0,0.4)]">
-            <Image src="/brand/thepower-logo.webp" alt="thePower" width={200} height={50} />
+        <div className="flex flex-col items-center gap-4">
+          <span className="inline-flex items-center rounded-[20px] bg-white px-8 py-5 shadow-[0_2px_10px_rgba(0,0,0,0.4)]">
+            <Image src="/brand/thepower-logo.webp" alt="thePower" width={320} height={80} />
           </span>
-          <span className="text-[clamp(0.7rem,1vw,0.95rem)] uppercase tracking-[0.3em] text-text-dim">
+          <span className="text-[clamp(0.85rem,1.3vw,1.2rem)] uppercase tracking-[0.3em] text-text-dim">
             en colaboración
           </span>
         </div>

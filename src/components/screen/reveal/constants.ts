@@ -21,8 +21,14 @@ export interface RevealBeatTimings {
   name: number;
   /** Curtain closed hold: EY SophIA | thePower branding + sheen. */
   curtainHold: number;
-  /** Curtain panels swinging open onto the podium. */
+  /** Curtain panels swinging open onto the camera sequence (or podium). */
   curtainOpen: number;
+  /** Camera cut 1 — dramatic low-angle shot of the winner monolith rising. */
+  camLow: number;
+  /** Camera cut 2 — lateral dolly: giant name travelling with parallax layers. */
+  camDolly: number;
+  /** Camera cut 3 — frontal hero shot (sting fires on this cut). */
+  camHero: number;
 }
 
 export const REVEAL_BEATS: RevealBeatTimings = {
@@ -32,9 +38,16 @@ export const REVEAL_BEATS: RevealBeatTimings = {
   name: 4.6,
   curtainHold: 3.4,
   curtainOpen: 1.4,
+  camLow: 2.2,
+  camDolly: 2.0,
+  camHero: 2.2,
 };
 
-/** Same beats, compressed proportionally, for prefers-reduced-motion (crossfades only). */
+/**
+ * Same beats, compressed proportionally, for prefers-reduced-motion
+ * (crossfades only). Camera cuts are skipped entirely in reduced mode,
+ * so their timings are zero.
+ */
 export const REVEAL_BEATS_REDUCED: RevealBeatTimings = {
   dim: 0.3,
   suspense: 1.3,
@@ -42,4 +55,7 @@ export const REVEAL_BEATS_REDUCED: RevealBeatTimings = {
   name: 2.1,
   curtainHold: 1.6,
   curtainOpen: 0.5,
+  camLow: 0,
+  camDolly: 0,
+  camHero: 0,
 };

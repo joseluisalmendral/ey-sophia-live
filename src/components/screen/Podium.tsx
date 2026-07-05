@@ -33,7 +33,7 @@ export interface PodiumProps {
 }
 
 // Relative heights for the asymmetric plinths (vh-driven).
-const HEIGHTS = { first: 46, second: 34, third: 26 } as const;
+const HEIGHTS = { first: 54, second: 40, third: 30 } as const;
 
 export const Podium = memo(function Podium({ outcome, reduced }: PodiumProps) {
   const [first, second, third] = outcome.podium;
@@ -41,7 +41,7 @@ export const Podium = memo(function Podium({ outcome, reduced }: PodiumProps) {
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-end gap-[clamp(1rem,3vh,2.5rem)] px-[clamp(1.5rem,4vw,4rem)] pb-[clamp(1.5rem,5vh,3.5rem)]">
-      <div className="flex w-full max-w-[1100px] items-end justify-center gap-[clamp(0.8rem,2.5vw,2.5rem)]">
+      <div className="flex w-full max-w-[1500px] items-end justify-center gap-[clamp(1rem,3vw,3.5rem)]">
         {/* 2nd — LEFT */}
         {second && (
           <PodiumBlock
@@ -127,12 +127,12 @@ function PodiumBlock({
     : `linear-gradient(180deg, color-mix(in srgb, ${team.color} 45%, var(--color-cosmic-700)) 0%, color-mix(in srgb, ${team.color} 22%, var(--color-cosmic-700)) 100%)`;
 
   return (
-    <div className="flex w-[clamp(8rem,20vw,17rem)] flex-col items-center">
+    <div className="flex w-[clamp(9rem,24vw,21rem)] flex-col items-center">
       {/* Crown above winners */}
-      <div className="flex h-[clamp(5rem,12vh,8rem)] items-end justify-center">
+      <div className="flex h-[clamp(5.5rem,14vh,9.5rem)] items-end justify-center">
         {isWinner && (
           <div className="flex flex-col items-center">
-            <Crown size={reduced ? 80 : 104} delay={delay + 0.4} reduced={reduced} />
+            <Crown size={reduced ? 92 : 128} delay={delay + 0.4} reduced={reduced} />
             {crownLabel && (
               <span className="mt-1 rounded-pill bg-ey-yellow px-3 py-0.5 font-display text-[clamp(0.7rem,1vw,0.95rem)] font-black uppercase tracking-[0.15em] text-ey-confident">
                 {crownLabel}
@@ -152,12 +152,12 @@ function PodiumBlock({
         <TeamColorChip
           color={team.color}
           label={team.name.charAt(0).toUpperCase()}
-          size={isWinner ? 56 : 44}
+          size={isWinner ? 68 : 52}
         />
         <span
           className="max-w-full truncate font-display font-black leading-tight"
           style={{
-            fontSize: isWinner ? "clamp(1.4rem,3vw,3rem)" : "clamp(1.1rem,2.2vw,2.2rem)",
+            fontSize: isWinner ? "clamp(1.8rem,4vw,4.2rem)" : "clamp(1.3rem,2.8vw,2.8rem)",
             color: isWinner ? "var(--color-ey-yellow)" : "var(--color-text)",
             textShadow: isWinner ? "0 0 28px rgba(255,230,0,0.4)" : undefined,
           }}
@@ -180,7 +180,7 @@ function PodiumBlock({
         <div className="flex flex-col items-center gap-1 pt-[clamp(0.8rem,2vh,1.6rem)]">
           <span
             className="font-display font-black leading-none tabular-nums"
-            style={{ fontSize: isWinner ? "clamp(2rem,4vw,4rem)" : "clamp(1.4rem,2.6vw,2.6rem)", color: fg }}
+            style={{ fontSize: isWinner ? "clamp(2.6rem,5.2vw,5.4rem)" : "clamp(1.7rem,3.2vw,3.2rem)", color: fg }}
           >
             {place}
             <span style={{ fontSize: "0.5em" }}>º</span>
@@ -191,11 +191,11 @@ function PodiumBlock({
             animate={{ scale: 1, opacity: 1 }}
             transition={reduced ? { delay: delay + 0.6, duration: durations.base } : { ...springs.slam, delay: delay + 0.7 }}
             className="font-display font-black leading-none tabular-nums"
-            style={{ fontSize: isWinner ? "clamp(1.6rem,3.2vw,3.4rem)" : "clamp(1.2rem,2.2vw,2.2rem)", color: fg }}
+            style={{ fontSize: isWinner ? "clamp(2rem,4.2vw,4.6rem)" : "clamp(1.4rem,2.7vw,2.7rem)", color: fg }}
           >
             <CountUp value={team.count} aria-label={`${team.name}: ${team.count} votos`} />
           </motion.span>
-          <span className="text-[clamp(0.6rem,0.9vw,0.85rem)] font-bold uppercase tracking-[0.18em]" style={{ color: fg, opacity: 0.75 }}>
+          <span className="text-[clamp(0.7rem,1.1vw,1.05rem)] font-bold uppercase tracking-[0.18em]" style={{ color: fg, opacity: 0.75 }}>
             votos
           </span>
         </div>
