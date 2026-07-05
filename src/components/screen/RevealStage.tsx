@@ -28,13 +28,15 @@ import type { RankedTeam, TieRule } from "@/lib/types";
  *       the left panel, thePower on the right, gold seam, roaming sheen,
  *       "Y el equipo ganador es…" pulsing on the join.
  *   (f) CAMERAS   — the curtain swings open onto PURE BLACK and a videogame-style
- *       champion presentation: 3 hard camera cuts (low-angle monolith, lateral
- *       dolly, frontal hero) with cinematic letterbox. The winner sting fires on
- *       the hero cut. See reveal/CameraCuts.tsx.
- *   (g) PODIUM    — letterbox retracts onto the podium climax: rise + crown +
- *       confetti edge-burst + ~4s fireworks finale that STOPS.
+ *       champion presentation: 3 camera shots (low-angle monolith, lateral
+ *       dolly, frontal hero) joined by whip-pan transitions, with cinematic
+ *       letterbox. The winner sting fires on the hero cut. See
+ *       reveal/CameraCuts.tsx.
+ *   (g) PODIUM    — the hero shot pulls back while the letterbox retracts onto
+ *       the podium climax: rise + crown + confetti edge-burst + ~4s fireworks
+ *       finale that STOPS.
  *
- * Timings live in reveal/constants.ts (~22s full arc, ~7.5s reduced).
+ * Timings live in reveal/constants.ts (~19.5s full arc, ~7.5s reduced).
  *
  * Zero votes: hint + name-tease + camera beats are skipped (no winner); the
  * curtain still opens onto the designed "Sin votos esta vez" state.
@@ -287,6 +289,7 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
               {beat === "cameras" && (
                 <CameraCuts
                   winners={outcome.winners}
+                  totalVotes={outcome.totalVotes}
                   timings={reduced ? REVEAL_BEATS_REDUCED : REVEAL_BEATS}
                 />
               )}

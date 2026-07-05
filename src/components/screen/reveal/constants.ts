@@ -2,12 +2,15 @@
  * Reveal choreography timings (seconds).
  *
  * The cinematic arc is: dim -> suspense -> color hint -> name tease -> curtain
- * (closed hold) -> curtain opens onto the podium climax. Total time from close
- * to podium is the sum of the beats (~17s full motion, ~7.5s reduced) — tune
- * here. Room-tested: ~11s felt rushed live — the audience needs air to guess
- * on each clue — so suspense and both teasers breathe longer. Every extended
- * beat carries a running loop (title pulse, bloom breathing, glitch cycle,
- * curtain sheen) so nothing reads as frozen.
+ * (closed hold) -> curtain opens onto the camera sequence -> podium. Total time
+ * from close to podium is the sum of the beats (~19.5s full motion, ~7.5s
+ * reduced) — tune here.
+ *
+ * v3 pacing note: the dramatic weight now lives AFTER the curtain (the camera
+ * sequence carries the wow), so the pre-curtain teasers were trimmed — they
+ * only need to plant the two clues, not sustain the room on their own. Every
+ * extended beat still carries a running loop (title pulse, bloom breathing,
+ * glitch cycle, curtain sheen) so nothing reads as frozen.
  */
 
 export interface RevealBeatTimings {
@@ -33,14 +36,14 @@ export interface RevealBeatTimings {
 
 export const REVEAL_BEATS: RevealBeatTimings = {
   dim: 0.6,
-  suspense: 3.2,
-  hint: 3.8,
-  name: 4.6,
-  curtainHold: 3.4,
+  suspense: 2.8,
+  hint: 2.4,
+  name: 3.0,
+  curtainHold: 3.0,
   curtainOpen: 1.4,
-  camLow: 2.2,
-  camDolly: 2.0,
-  camHero: 2.2,
+  camLow: 2.6,
+  camDolly: 2.4,
+  camHero: 2.7,
 };
 
 /**
