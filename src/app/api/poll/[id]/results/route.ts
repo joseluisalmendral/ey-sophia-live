@@ -61,11 +61,12 @@ export async function GET(
   });
 
   if (error) {
-    // Never surface a hard error to the polling voter path; an empty, cacheable
-    // result degrades gracefully to the neutral "watch the big screen" state.
+    // Never surface a hard error to the polling voter path — but NEVER cache
+    // the empty fallback: a transient RPC error during the reveal would pin
+    // "no results" on the CDN for seconds right at the climax.
     return NextResponse.json(
       { teams: [] },
-      { headers: { "Cache-Control": CACHE_CONTROL } },
+      { headers: { "Cache-Control": "no-store" } },
     );
   }
 

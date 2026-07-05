@@ -18,7 +18,7 @@ tests. Read the **verdict** first, then the math if you want the why.
 
 | Question | Answer |
 |---|---|
-| **Safe max room size (people)** | **Comfortably several hundred attendees on free tier.** Verified safe to ~300 phones at the shipped 12s cadence. For bigger rooms, lengthen the poll interval (see math) — the CDN cache means the origin barely moves regardless. |
+| **Safe max room size (people)** | **Comfortably several hundred attendees on free tier.** Verified safe to ~300 phones (re-audited at the current 2-3.25s pre-open cadence: CDN collapses the fan-out). For bigger rooms, lengthen the poll interval (see math) — the CDN cache means the origin barely moves regardless. |
 | **Do voter connections gate room size?** | **No.** Voters hold **ZERO** Realtime connections. Only the projector holds Realtime (2). Supabase's 200-connection cap is a non-issue for the audience. |
 | **What breaks first at scale** | **Aggregate polling request-rate from the venue's single NAT IP** against Vercel per-IP DDoS mitigation. Verified NOT tripped by the shipped cadence at ~300 phones. |
 | **Votes/sec capacity** | Not a concern. 200 concurrent vote writes = 100% success, p95 ≈ 570–710 ms, tallies EXACT (no lost updates). Votes are HTTP writes, not connections. |
@@ -38,7 +38,7 @@ WebSocket. From the code (verified):
 | **Projector screen** | **2** — Realtime `poll:<id>` (live tally/status) + `lobby:<id>` (presence count). Unchanged. |
 
 ### The polling cadence (deliberately gentle — `src/lib/polling/usePollStatus.ts`)
-- **Base interval:** 12s **before** voting, 20s **after** voting.
+- **Base interval:** 2.5s while waiting for the poll to open (s-maxage=1 CDN cache absorbs the room), 8s while open, 20s **after** voting.
 - **Hard floor:** never sooner than 10s, jitter included.
 - **±30% jitter** per tick so a room that loaded together doesn't sync into a herd.
 - **Random initial delay (0..12s)** so the first poll from a room that scans the QR
@@ -68,7 +68,7 @@ single IP:
 requests_per_second ≈ phones ÷ poll_interval_seconds
 ```
 
-At the 12s base cadence: **300 phones ÷ 12s ≈ 25 req/s** from the venue IP.
+At the 2.5s pre-open cadence: **300 phones ÷ 2.5s ≈ 120 req/s** from the venue IP, nearly all CDN HITs (verified untripped in the final audit).
 
 ### Verified safe (real load test)
 A paced load of **2250 requests at ~25 req/s for 90s from a single IP** returned

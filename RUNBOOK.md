@@ -53,7 +53,8 @@ Notas:
 - Que producción esté desplegada implica que el **cron diario de keep-alive está ACTIVO** (§5) — el
   proyecto gratuito de Supabase no se pausará.
 
-### (2) Las URLs de Auth de Supabase están configuradas (el magic-link del admin funciona) ✅
+### (2) Las URLs de Auth de Supabase están configuradas ✅
+> **Login del día del evento: email + contraseña** (primario). El magic-link queda como fallback y está limitado a ~2 emails/hora en el plan free — no confiar en él en vivo.
 El admin inicia sesión mediante magic-link, que solo funciona si la Site URL + las Redirect URLs
 están en la lista de permitidos. Esto está **hecho** — el login por magic-link está confirmado y funciona.
 - Panel de Supabase → **Authentication → URL Configuration** (para referencia):
