@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 /**
  * useLobbyJoins — projector-side lobby join feed via HTTP POLLING (no realtime).
  *
- * Replaces the presence-based useLobbyRoster: the screen polls the CDN-cached
- * GET /api/poll/[id]/lobby (~1 origin hit / 2s thanks to s-maxage) on a ~4s
- * jittered, visibility-aware cadence. Voters land in the feed via their
+ * Replaces the presence-based useLobbyRoster: the screen polls
+ * GET /api/poll/[id]/lobby (no-store — the origin cost of a few projectors
+ * polling is negligible) on a ~2.2s jittered, visibility-aware cadence so a
+ * join shows up on the projector in ~1-2s typical. Voters land in the feed via
+ * their
  * one-shot POST /join, so the whole lobby runs with ZERO websockets — the only
  * realtime connection left on the screen is the tally channel.
  *
@@ -36,9 +38,9 @@ export interface LobbyJoins {
   members: LobbyMember[];
 }
 
-/** Base polling cadence; each tick adds up to 1s of jitter to avoid stampedes. */
-const POLL_INTERVAL_MS = 4000;
-const POLL_JITTER_MS = 1000;
+/** Base polling cadence; each tick adds up to 0.5s of jitter to avoid stampedes. */
+const POLL_INTERVAL_MS = 2200;
+const POLL_JITTER_MS = 500;
 
 interface LobbyResponse {
   count?: number;

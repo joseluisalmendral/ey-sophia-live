@@ -25,7 +25,7 @@ import type {
  *     `tally` (absolute count per team) and `status` (lifecycle) events.
  *
  * Resilience contract:
- *  - Incoming tally updates are BATCHED to ~120ms cadence (one flush) so a burst
+ *  - Incoming tally updates are BATCHED to ~80ms cadence (one flush) so a burst
  *    of votes animates as a single smooth FLIP step, not a flicker storm.
  *  - Broadcasts carry ABSOLUTE counts merged with "highest wins" (counts are
  *    monotonic within a run), so no race or reordering can regress the board;
@@ -57,7 +57,10 @@ interface TeamMeta {
   position: number;
 }
 
-const BATCH_MS = 120;
+// 80ms still coalesces a same-burst vote storm into one FLIP step (frame
+// budget is ~16ms, so ~5 frames of slack) while shaving ~40ms of perceived
+// broadcast->paint latency versus the previous 120ms.
+const BATCH_MS = 80;
 // Backstop resync cadence while the poll is OPEN: even if a tally broadcast is
 // silently dropped (degraded wifi, throttled tab) no vote stays unpainted for
 // longer than this.
