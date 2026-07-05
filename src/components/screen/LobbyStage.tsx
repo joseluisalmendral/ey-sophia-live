@@ -161,17 +161,14 @@ export const LobbyStage = memo(function LobbyStage({
           initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: durations.slow, ease: easings.decel }}
-          className="flex items-center gap-[clamp(0.8rem,1.4vw,1.2rem)]"
+          className="flex flex-col gap-[clamp(0.35rem,1vh,0.7rem)] px-[clamp(0.9rem,1.8vw,1.6rem)]"
         >
-          <EyBeam surface="dark" size={52} label="" />
-          <div className="flex flex-col gap-[clamp(0.25rem,0.8vh,0.5rem)]">
-            <h1 className="font-display text-[clamp(1.9rem,3.4vw,3.5rem)] font-black leading-none text-text">
-              {poll.title}
-            </h1>
-            <span className="text-[clamp(0.9rem,1.35vw,1.25rem)] font-medium uppercase tracking-[0.22em] text-text-dim">
-              {isCountdown ? "Preparados…" : "Los votos aparecen en cuanto abra la votación"}
-            </span>
-          </div>
+          <h1 className="font-display text-[clamp(1.9rem,3.4vw,3.5rem)] font-black leading-none text-text">
+            {poll.title}
+          </h1>
+          <span className="text-[clamp(0.9rem,1.35vw,1.25rem)] font-medium uppercase tracking-[0.22em] text-text-dim">
+            {isCountdown ? "Preparados…" : "Los votos aparecen en cuanto abra la votación"}
+          </span>
         </motion.div>
 
         <ul className="flex flex-col gap-[clamp(0.6rem,1.6vh,1.2rem)]">
