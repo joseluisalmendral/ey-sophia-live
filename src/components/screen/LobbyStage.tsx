@@ -128,17 +128,19 @@ export const LobbyStage = memo(function LobbyStage({
           Escanea para unirte
         </motion.span>
 
-        {/* Live joined counter: participants number only — no aliases on screen. */}
-        <div className="flex min-h-[6rem] w-full flex-col items-center justify-start gap-[clamp(0.5rem,1.2vh,0.9rem)]">
+        {/* Live joined counter: participants number only — no aliases on screen.
+            No reserved height: an empty slot would push the QR off the shared
+            optical center, so the block grows in with an animated height. */}
+        <div className="flex w-full flex-col items-center justify-start">
           <AnimatePresence>
             {joined !== null && joined > 0 && (
               <motion.div
                 key="joined-count"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: durations.base }}
-                className="flex items-baseline gap-2"
+                className="flex items-baseline gap-2 overflow-hidden"
               >
                 <span
                   ref={counterScope}
@@ -161,7 +163,7 @@ export const LobbyStage = memo(function LobbyStage({
           initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: durations.slow, ease: easings.decel }}
-          className="flex flex-col gap-[clamp(0.35rem,1vh,0.7rem)] px-[clamp(0.9rem,1.8vw,1.6rem)]"
+          className="flex flex-col gap-[clamp(0.35rem,1vh,0.7rem)]"
         >
           <h1 className="font-display text-[clamp(1.9rem,3.4vw,3.5rem)] font-black leading-none text-text">
             {poll.title}
