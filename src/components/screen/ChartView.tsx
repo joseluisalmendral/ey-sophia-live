@@ -82,11 +82,16 @@ export const ChartView = memo(function ChartView({
       textStyle: { color: TEXT, fontFamily: CHART_FONT_FAMILY },
     };
 
+    // Anonymous runs mask every name to "": labels/axes then show only the
+    // vote counts (no placeholder, no stray line break, no empty axis slots).
+    const hasNames = teams.some((t) => t.name);
+
     if (type === "donut") {
       return {
         ...base,
         tooltip: { show: false },
-        legend: showLegend
+        // A legend of nameless entries is just floating dots — skip it too.
+        legend: showLegend && hasNames
           ? {
               bottom: 8,
               textStyle: { color: TEXT_DIM, fontSize: fs(24) },
@@ -97,7 +102,7 @@ export const ChartView = memo(function ChartView({
           {
             type: "pie",
             radius: ["46%", "74%"],
-            center: ["50%", showLegend ? "46%" : "50%"],
+            center: ["50%", showLegend && hasNames ? "46%" : "50%"],
             avoidLabelOverlap: true,
             itemStyle: {
               borderColor: "#0B1026",
@@ -110,7 +115,10 @@ export const ChartView = memo(function ChartView({
               fontSize: fs(32),
               fontWeight: "bold",
               lineHeight: fs(38),
-              formatter: "{b}\n{c}",
+              // Function formatter so an empty (anonymous) name renders just
+              // the count — "{b}\n{c}" would leave a dangling line break.
+              formatter: (p: { name: string; value: unknown }) =>
+                p.name ? `${p.name}\n${p.value}` : `${p.value}`,
             },
             labelLine: { show: showNames, lineStyle: { color: TEXT_DIM } },
             emphasis: {
@@ -137,7 +145,9 @@ export const ChartView = memo(function ChartView({
         type: "category",
         data: teams.map((t) => t.name),
         axisLabel: {
-          show: showNames,
+          // Hide the whole axis label row when names are masked (anonymous):
+          // empty category labels would just reserve ugly blank space.
+          show: showNames && hasNames,
           color: TEXT,
           fontSize: fs(30),
           fontWeight: "bold",

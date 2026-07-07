@@ -82,8 +82,8 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
   // ANONYMOUS DISPLAY (presentation-only): identities hide ONLY while the vote
   // is OPEN. The lobby (draft/countdown) shows the REAL teams — the room must
   // see their team is in before voting starts — and the reveal (closed) always
-  // receives the REAL teams. During open, rows rewrite to identical "???"
-  // labels with indigo shades keyed on the CONFIGURED team position (never the
+  // receives the REAL teams. During open, rows rewrite to identical EMPTY
+  // labels with neutral grey shades keyed on the CONFIGURED team position (never the
   // ranking, which would re-identify teams as bars swap). This keys off the
   // DERIVED `status` (local flip included), so a countdown→open local flip
   // masks at the exact moment the poll opens, before any broadcast lands.

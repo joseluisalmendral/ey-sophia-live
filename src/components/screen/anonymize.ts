@@ -9,9 +9,10 @@ import type { RankedTeam, Team } from "@/lib/types";
  * percentages pass through untouched, so BarRace / donut / columns all render
  * the anonymized race for free (the mapping runs BEFORE the render).
  *
- * Labels: every masked team reads "???" (chip "?") — deliberately identical, so
- * no label ever hints at an identity. Visual tracking of each bar is carried by
- * the color variants + the bar's position, never by the label.
+ * Labels: every masked team has an EMPTY name — no label at all (not even a
+ * placeholder), so nothing on screen invites the room to map labels to teams.
+ * Visual tracking of each bar is carried by the grey variants + the bar's
+ * position, never by the label.
  *
  * Color assignment is keyed on the team's CONFIGURED position, NEVER on the
  * current ranking: a rank-based shade would re-identify teams the moment bars
@@ -20,19 +21,21 @@ import type { RankedTeam, Team } from "@/lib/types";
  * keeps its shade and can be followed as a bar — without leaking which real
  * team it is.
  *
- * Colors: N subtle variants of ONE neutral cosmic indigo — never the EY yellow
- * accent, never any real team color. The variants differ just enough in hue and
- * lightness to track each bar across FLIP reorders, while reading as "identity
- * withheld" as a set. Labels drawn on top must keep using pickTextOn.
+ * Colors: N NEUTRAL GREYS — never the EY yellow accent, never anything close to
+ * a real team color (the event teams are green, purple, orange, blue and
+ * yellow; even a muted indigo reads as "the blue team"). Saturation stays at
+ * ~5% (no perceivable tint) and the variants differ by a lightness ramp, so
+ * each bar is followable across FLIP reorders while the whole set reads as
+ * "identity withheld". Labels drawn on top must keep using pickTextOn.
  */
 
 /**
- * The single masked label. All hidden teams share it on purpose: any per-team
- * label (letters, numbers) invites the room to map labels to teams; identical
- * question marks read unambiguously as "identity withheld". teamInitial("???")
- * yields "?" so the chips collapse to a plain question mark too.
+ * The single masked label: the EMPTY string. All hidden teams share it on
+ * purpose — any per-team label (letters, numbers, even "???") invites the room
+ * to map labels to teams. teamInitial("") yields "" so the chips collapse to a
+ * plain grey dot too.
  */
-export const ANONYMOUS_NAME = "???";
+export const ANONYMOUS_NAME = "";
 
 /** Convert HSL (h 0-360, s/l 0-100) to a #rrggbb hex string. */
 function hslToHex(h: number, s: number, l: number): string {
@@ -49,22 +52,30 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 /**
- * N distinguishable variants of a single neutral cosmic indigo (hue ~222-238,
- * muted saturation, mid lightness). Followable, never identifying.
+ * N distinguishable NEUTRAL GREYS. Identity lives in the lightness ramp
+ * (L 32% → 68% by configured position); a barely-there ±4 warm/cool hue nudge
+ * at ~5% saturation separates neighbouring bars without ever suggesting a team
+ * color. At this saturation no grey can read as green/purple/orange/blue/
+ * yellow/red. pickTextOn stays AA on the whole ramp (white on the dark end,
+ * black on the light end).
  */
 export function anonymousColor(index: number, total: number): string {
   const n = Math.max(1, total);
   const t = n === 1 ? 0.5 : index / (n - 1);
-  const hue = 222 + t * 16; // narrow indigo band
-  const sat = 26 + ((index % 3) * 6); // 26-38%, always muted
-  const light = 38 + t * 22; // 38-60%: subtle lightness ramp per bar
+  // Alternate a faintly warm (30°) / faintly cool (222°) cast between
+  // neighbours — imperceptible as color at 5% saturation, just enough to
+  // keep adjacent greys from merging.
+  const hue = index % 2 === 0 ? 222 : 30;
+  const sat = 5; // ~neutral: no appreciable tint
+  const light = 32 + t * 36; // 32-68%: the ramp that makes each bar followable
   return hslToHex(hue, sat, light);
 }
 
 /**
  * Chip initial for a team name: first char of the LAST word, so "Equipo Rojo"
  * reads "R" instead of every chip collapsing to "E". Single-word names keep
- * their first char; the anonymous "???" naturally reads "?".
+ * their first char; the anonymous empty name yields "" (chip renders as a
+ * plain color dot).
  */
 export function teamInitial(name: string): string {
   const words = name.trim().split(/\s+/);

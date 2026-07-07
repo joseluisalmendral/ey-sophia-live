@@ -7,46 +7,41 @@ import { fireConfettiBurst, startFireworksFinale } from "@/lib/effects/fireworks
 import { playWinnerSting, type WinnerStingHandle } from "@/lib/effects/winnerSting";
 import { Podium } from "./Podium";
 import { resolveReveal, type RevealOutcome } from "./winner";
-import { ColorHint } from "./reveal/ColorHint";
-import { NameTease } from "./reveal/NameTease";
 import { Curtain } from "./reveal/Curtain";
 import { CameraCuts } from "./reveal/CameraCuts";
 import { REVEAL_BEATS, REVEAL_BEATS_REDUCED } from "./reveal/constants";
 import type { RankedTeam, TieRule } from "@/lib/types";
 
 /**
- * RevealStage — the CLOSED state finale, now a 6-beat CINEMATIC arc:
+ * RevealStage — the CLOSED state finale, a tight CINEMATIC arc:
  *
  *   (a) DIM       — the stage dims over the frozen race.
  *   (b) SUSPENSE  — "Y el equipo ganador es…" hold; at the END of this beat the
  *       final outcome is captured from the live ref (fire-time, never mount-time).
- *   (c) COLOR HINT — the winner's team color blooms across the dark (both colors
- *       on a double crown). First clue, no names.
- *   (d) NAME TEASE — ~45% of the winner's name locks in, the rest keeps cycling
- *       glitched glyphs in the team color. Second clue.
- *   (e) TELÓN     — a 3D theatre curtain slams shut: EY SophIA (IA in purple) on
+ *       This is the only anteroom before the curtain, so it breathes longer.
+ *   (c) TELÓN     — a 3D theatre curtain slams shut: EY SophIA (IA in purple) on
  *       the left panel, thePower on the right, gold seam, roaming sheen,
  *       "Y el equipo ganador es…" pulsing on the join.
- *   (f) CAMERAS   — the curtain swings open onto PURE BLACK and a videogame-style
+ *   (d) CAMERAS   — the curtain swings open onto PURE BLACK and a videogame-style
  *       champion presentation: 3 camera shots (low-angle monolith, lateral
  *       dolly, frontal hero) joined by whip-pan transitions, with cinematic
  *       letterbox. The winner sting fires on the hero cut. See
  *       reveal/CameraCuts.tsx.
- *   (g) PODIUM    — the hero shot pulls back while the letterbox retracts onto
+ *   (e) PODIUM    — the hero shot pulls back while the letterbox retracts onto
  *       the podium climax: rise + crown + confetti edge-burst + ~4s fireworks
  *       finale that STOPS.
  *
- * Timings live in reveal/constants.ts (~19.5s full arc, ~7.5s reduced).
+ * Timings live in reveal/constants.ts (~16s full arc, ~4s reduced).
  *
- * Zero votes: hint + name-tease + camera beats are skipped (no winner); the
- * curtain still opens onto the designed "Sin votos esta vez" state.
- * Ties: resolveReveal() decides double_crown; hint/tease/cameras/podium all
- * render both co-winners. Reduced motion: same beats minus the camera cuts,
- * compressed, crossfades only, no confetti/fireworks/audio. The `ready` gate is
- * unchanged: nothing starts until the initial absolute tally has resolved.
+ * Zero votes: camera beats are skipped (no winner); the curtain still opens
+ * onto the designed "Sin votos esta vez" state.
+ * Ties: resolveReveal() decides double_crown; cameras/podium render both
+ * co-winners. Reduced motion: same beats minus the camera cuts, compressed,
+ * crossfades only, no confetti/fireworks/audio. The `ready` gate is unchanged:
+ * nothing starts until the initial absolute tally has resolved.
  */
 
-type Beat = "suspense" | "hint" | "name" | "curtain" | "cameras" | "podium";
+type Beat = "suspense" | "curtain" | "cameras" | "podium";
 
 export interface RevealStageProps {
   teams: RankedTeam[];
@@ -118,25 +113,13 @@ function useRevealChoreography(
       setFinalOutcome(fo);
       const hasWinner = !fo.zeroVotes && fo.winners.length > 0;
 
-      if (hasWinner) {
-        // Beat (c) COLOR HINT.
-        setBeat("hint");
-        await wait(t.hint * 1000);
-        if (cancelled) return;
-
-        // Beat (d) NAME TEASE.
-        setBeat("name");
-        await wait(t.name * 1000);
-        if (cancelled) return;
-      }
-
-      // Beat (e) TELÓN — closed hold with the co-brand.
+      // Beat (c) TELÓN — closed hold with the co-brand.
       setBeat("curtain");
       await wait(t.curtainHold * 1000);
       if (cancelled) return;
 
       if (!reduced && hasWinner) {
-        // Beat (f) CAMERAS — curtain opens onto black + 3 videogame-style cuts.
+        // Beat (d) CAMERAS — curtain opens onto black + 3 videogame-style cuts.
         setBeat("cameras");
         await wait((t.camLow + t.camDolly) * 1000);
         if (cancelled) return;
@@ -149,7 +132,7 @@ function useRevealChoreography(
         await wait(t.camHero * 1000);
         if (cancelled) return;
 
-        // Beat (g) PODIUM — letterbox retracts onto the full climax.
+        // Beat (e) PODIUM — letterbox retracts onto the full climax.
         setBeat("podium");
 
         // Confetti edge-burst once the plinths land.
@@ -238,32 +221,6 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
             >
               Y el equipo ganador es…
             </motion.h2>
-          </motion.div>
-        )}
-
-        {beat === "hint" && (
-          <motion.div
-            key="hint"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: durations.base }}
-            className="relative z-10 h-full"
-          >
-            <ColorHint winners={outcome.winners} reduced={reduced} />
-          </motion.div>
-        )}
-
-        {beat === "name" && (
-          <motion.div
-            key="name"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: durations.base }}
-            className="relative z-10 h-full"
-          >
-            <NameTease winners={outcome.winners} reduced={reduced} />
           </motion.div>
         )}
 

@@ -110,14 +110,17 @@ export const BarRace = memo(function BarRace({
                         }
                   }
                 >
-                  {/* Team identity inside the bar (legible via pickTextOn for leader). */}
+                  {/* Team identity inside the bar (legible via pickTextOn for
+                      leader). On anonymous runs the name is empty: the chip
+                      renders as a plain color dot (no initial) and the name
+                      span is skipped entirely, giving the bar the full width. */}
                   <span className="flex min-w-0 items-center gap-[clamp(0.4rem,0.9vw,0.8rem)] pl-[clamp(0.6rem,1.2vw,1.1rem)]">
                     <TeamColorChip
                       color={team.color}
-                      label={teamInitial(team.name)}
+                      label={teamInitial(team.name) || undefined}
                       size={28}
                     />
-                    {showNames && (
+                    {showNames && team.name && (
                       <span
                         className="truncate font-display text-[clamp(1.2rem,2.4vw,2.5rem)] font-extrabold"
                         style={{
@@ -145,7 +148,14 @@ export const BarRace = memo(function BarRace({
                       : undefined,
                   }}
                 >
-                  <CountUp value={team.count} aria-label={`${team.name}: ${team.count} votos`} />
+                  <CountUp
+                    value={team.count}
+                    aria-label={
+                      team.name
+                        ? `${team.name}: ${team.count} votos`
+                        : `${team.count} votos`
+                    }
+                  />
                 </span>
                 {team.percentage !== null && (
                   <span className="text-[clamp(0.9rem,1.4vw,1.45rem)] font-semibold tabular-nums text-text-dim">
