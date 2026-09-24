@@ -1,11 +1,9 @@
 "use client";
 
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ShaderBackground } from "@/components/providers/ShaderBackground";
-import { CodeBadge } from "@/components/atoms/CodeBadge";
 import { CountdownTimer } from "@/components/atoms/CountdownTimer";
-import { QrCode } from "@/components/atoms/QrCode";
 import { EyBeam } from "@/components/brand/EyBeam";
 import { durations, easings } from "@/lib/motion/tokens";
 import type {
@@ -25,6 +23,11 @@ import { ChartView } from "./ChartView";
 import { LobbyStage } from "./LobbyStage";
 import { RevealStage } from "./RevealStage";
 import { ScreenStageProvider, type RevealBeat, type ScreenStageFrame } from "./ScreenStageContext";
+import { BeamStinger, type StingerVariant } from "./broadcast/BeamStinger";
+import { LiveBug } from "./broadcast/LiveBug";
+import { LowerThird } from "./broadcast/LowerThird";
+import { QrFrame } from "./broadcast/QrFrame";
+import { Sep } from "./broadcast/Sep";
 
 /**
  * ScreenStage — the PRESENTATIONAL projector board (no data hooks, no network).
@@ -49,9 +52,35 @@ import { ScreenStageProvider, type RevealBeat, type ScreenStageFrame } from "./S
  * countdown→open local flip masks at the exact moment the poll opens, before
  * any broadcast lands. Masking happens here, upstream of every chart, so both
  * production and /lab render through the same wall.
+ *
+ * LOBBY on anonymous runs (E6): the finalists render as ONE masked card, so the
+ * lobby receives masked identities too (names never reach it).
+ *
+ * BROADCAST GRAMMAR (E6): the header carries the live bug; lobby/count-in →
+ * live and live → reveal are stitched by the EY-beam stinger (count-in → live
+ * opens with a "¡YA!" frame); a lower third captions the open entry. Stingers
+ * fire only on a real status transition, never on a mid-show reload.
  */
 
 const SHOW_NAMES_DEFAULT = true;
+
+/**
+ * Projector root scale: the stage type is fluid (vw) with rem caps tuned for a
+ * 1080p frame. Above 1920×1080 CSS px (a 4K projector at 100 % scaling) the
+ * caps would freeze the type while the frame keeps growing, so the root font
+ * grows with the 16:9 frame instead (never below the 16px default). 1080p and
+ * smaller are untouched.
+ */
+function useProjectorRootScale() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const prev = root.style.fontSize;
+    root.style.fontSize = "max(16px, min(calc(100vw / 120), calc(100vh / 67.5)))";
+    return () => {
+      root.style.fontSize = prev;
+    };
+  }, []);
+}
 
 export interface ScreenStageProps {
   poll: Poll;
@@ -93,6 +122,7 @@ export function ScreenStage({
   mascotSlot = null,
 }: ScreenStageProps) {
   const showNames = poll.showLegend ? SHOW_NAMES_DEFAULT : false;
+  useProjectorRootScale();
   // Reveal beat (suspense → curtain → cameras → podium) reported by RevealStage
   // so the mascot slot can hide itself during the curtain + camera cuts.
   const [revealBeat, setRevealBeat] = useState<RevealBeat | null>(null);
@@ -108,6 +138,41 @@ export function ScreenStage({
     () => (anonymized ? anonymizeIdentities(teams, positionById) : teams),
     [anonymized, teams, positionById],
   );
+  // Lobby of an anonymous run: masked as well (the lobby shows one card).
+  const lobbyAnon = poll.anonymousDisplay && (status === "draft" || status === "countdown");
+  const lobbyTeams = useMemo(
+    () => (lobbyAnon ? anonymizeIdentities(teams, positionById) : displayTeams),
+    [lobbyAnon, teams, positionById, displayTeams],
+  );
+  const lobbyLiveTeams = useMemo(
+    () => (lobbyAnon ? anonymizeRankedTeams(liveTeams, positionById) : displayLiveTeams),
+    [lobbyAnon, liveTeams, positionById, displayLiveTeams],
+  );
+  const totalVotes = useMemo(
+    () => displayLiveTeams.reduce((s, t) => s + t.count, 0),
+    [displayLiveTeams],
+  );
+
+  // Stingers: derived from real status transitions (state-during-render
+  // pattern, no effects). A reload mid-show starts with no stinger and no
+  // lower third.
+  const [prevStatus, setPrevStatus] = useState(status);
+  const [stinger, setStinger] = useState<{ id: number; variant: StingerVariant } | null>(null);
+  const [stingerSeq, setStingerSeq] = useState(0);
+  const [liveFresh, setLiveFresh] = useState(false);
+  if (status !== prevStatus) {
+    setPrevStatus(status);
+    const fromLobby = prevStatus === "draft" || prevStatus === "countdown";
+    if (status === "open" && fromLobby) {
+      setStingerSeq(stingerSeq + 1);
+      setStinger({ id: stingerSeq + 1, variant: prevStatus === "countdown" ? "ya" : "wipe" });
+      setLiveFresh(true);
+    } else if (status === "closed" && prevStatus === "open") {
+      setStingerSeq(stingerSeq + 1);
+      setStinger({ id: stingerSeq + 1, variant: "wipe" });
+    }
+  }
+  const endStinger = useCallback(() => setStinger(null), []);
 
   // Graceful guard: a misconfigured poll (no teams) must never render a broken
   // race/donut/podium. Show a calm "in preparation" board instead. Uses the SSR
@@ -165,22 +230,23 @@ export function ScreenStage({
                 className="z-10 flex shrink-0 items-center justify-between px-[clamp(1.5rem,4vw,4rem)] pt-[clamp(0.8rem,2.5vh,2rem)]"
               >
                 <div className="flex items-center gap-3" data-mascot-keepout="header">
-                  <EyBeam surface="dark" size={36} label="" />
+                  <EyBeam surface="dark" size={36} label="" style={{ height: "2.25rem", width: "4.5rem" }} />
                   <span className="font-display text-[clamp(0.95rem,1.9vw,1.8rem)] font-black leading-none tracking-tight text-text">
                     <span className="text-sophia-accent glow-sophia">IA</span> HACKATHON
-                    <span className="ml-2 text-[clamp(0.6rem,1vw,1rem)] font-bold uppercase tracking-[0.2em] text-text-dim">
-                      EN VIVO
-                    </span>
                   </span>
                 </div>
 
-                {/* Right side: connection meta (live only). The close countdown
-                    lives prominently in the LiveStage join rail, not here. */}
-                {status === "open" && (
-                  <div className="flex items-center gap-[clamp(0.75rem,2vw,1.5rem)]" data-mascot-keepout="status">
-                    <ConnectionDot state={connectionState} />
-                  </div>
-                )}
+                {/* Right side: the broadcast live bug (state + vote total;
+                    also the honest realtime-connection indicator). */}
+                <div className="flex items-center" data-mascot-keepout="status">
+                  <LiveBug
+                    status={status}
+                    opensAt={opensAt}
+                    closesAt={closesAt}
+                    total={totalVotes}
+                    connectionState={connectionState}
+                  />
+                </div>
               </motion.header>
             )}
           </AnimatePresence>
@@ -192,8 +258,9 @@ export function ScreenStage({
                 <StageWrap key="lobby" reduced={reduced}>
                   <LobbyStage
                     poll={poll}
-                    teams={displayTeams}
-                    liveTeams={displayLiveTeams}
+                    teams={lobbyTeams}
+                    liveTeams={lobbyLiveTeams}
+                    anonymous={poll.anonymousDisplay}
                     voterUrl={voterUrl}
                     isCountdown={status === "countdown"}
                     opensAt={opensAt}
@@ -213,6 +280,7 @@ export function ScreenStage({
                     anonymized={anonymized}
                     closesAt={closesAt}
                     reduced={reduced}
+                    fresh={liveFresh}
                   />
                 </StageWrap>
               )}
@@ -243,6 +311,16 @@ export function ScreenStage({
           {/* Mascot host (E3). Outside the stage AnimatePresence so stage
               transitions never remount it. */}
           {mascotSlot}
+
+          {/* Stage stinger (above everything, transform-only, one-shot). */}
+          {stinger && (
+            <BeamStinger
+              key={stinger.id}
+              variant={stinger.variant}
+              reduced={reduced}
+              onDone={endStinger}
+            />
+          )}
         </div>
         </ScreenStageProvider>
       </main>
@@ -285,6 +363,7 @@ const LiveStage = memo(function LiveStage({
   anonymized,
   closesAt,
   reduced,
+  fresh,
 }: {
   poll: Poll;
   voterUrl: string;
@@ -294,39 +373,49 @@ const LiveStage = memo(function LiveStage({
   anonymized: boolean;
   closesAt: string | null;
   reduced: boolean;
+  /** Entered through a real open transition: caption it with the lower third. */
+  fresh: boolean;
 }) {
   const isDivRace = poll.chartType === "bar_race";
 
   return (
-    <div className="grid h-full w-full grid-cols-[minmax(0,26%)_minmax(0,74%)] items-center gap-[clamp(1rem,2.5vw,2.5rem)] px-[clamp(1.25rem,3vw,3rem)] pb-[clamp(1rem,3vh,2.5rem)] pt-[clamp(0.5rem,1.5vh,1.5rem)]">
+    <div className="relative grid h-full w-full grid-cols-[minmax(0,26%)_minmax(0,74%)] items-center gap-[clamp(1rem,2.5vw,2.5rem)] px-[clamp(1.25rem,3vw,3rem)] pb-[clamp(1rem,3vh,2.5rem)] pt-[clamp(0.5rem,1.5vh,1.5rem)]">
       {/* Persistent join rail — the QR stays big enough to scan from the back
           of the room (fluid ~200-300px, capped by viewport height so it never
           crowds the countdown on short screens). */}
-      <div className="flex min-w-0 flex-col items-center gap-[clamp(0.6rem,1.6vh,1.2rem)]">
-        <span className="font-display text-[clamp(0.7rem,1.1vw,1.05rem)] font-bold uppercase tracking-[0.22em] text-text-dim">
+      <div className="flex min-w-0 flex-col items-center gap-[clamp(0.6rem,1.8vh,1.4rem)]">
+        <span className="font-display text-proj-label font-extrabold uppercase leading-none tracking-[0.16em] text-text">
           Escanea para unirte
         </span>
         <div data-mascot-keepout="qr" className="flex w-full justify-center">
-          <QrCode
-            value={voterUrl}
-            size={280}
-            className="w-[min(clamp(200px,15.5vw,300px),34vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
-          />
+          <QrFrame value={voterUrl} className="w-[min(13vw,25vh)]" />
         </div>
-        <div data-mascot-keepout="code">
-          <CodeBadge code={poll.joinCode} caption="Únete" size="inline" />
+        <div
+          className="glass glass--flat flex items-baseline gap-[0.6em] px-[1em] py-[0.5em] leading-none"
+          style={{ borderRadius: "1rem" }}
+          data-mascot-keepout="code"
+        >
+          <span className="font-display text-proj-label font-extrabold uppercase tracking-[0.18em] text-text-dim">
+            código
+          </span>
+          <span
+            className="font-display text-proj-h2 font-black uppercase tracking-[0.12em] text-ey-yellow"
+            style={{ textShadow: "0 0 20px rgb(255 230 0 / 0.3)" }}
+          >
+            {poll.joinCode}
+          </span>
         </div>
         {/* Prominent close countdown when a duration was configured. Pulses < 10s
             (handled inside CountdownTimer). Server-authoritative from closesAt. */}
         {closesAt && (
           <div
-            className="mt-[clamp(0.4rem,1.5vh,1.4rem)] flex flex-col items-center gap-1"
+            className="mt-[clamp(0.3rem,1.2vh,1.2rem)] flex flex-col items-center gap-[0.2rem]"
             data-mascot-keepout="countdown"
           >
-            <span className="font-display text-[clamp(0.6rem,0.9vw,0.9rem)] font-bold uppercase tracking-[0.22em] text-text-dim">
+            <span className="font-display text-proj-label font-extrabold uppercase leading-none tracking-[0.18em] text-text-dim">
               Cierra en
             </span>
-            <CountdownTimer closesAt={closesAt} size="hero" />
+            <CountdownTimer closesAt={closesAt} size="hero" className="text-proj-number!" />
           </div>
         )}
       </div>
@@ -373,16 +462,20 @@ const LiveStage = memo(function LiveStage({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: durations.base }}
-            className="mb-[clamp(0.5rem,1.4vh,1rem)] flex items-center justify-center gap-2"
-            data-mascot-keepout="badge"
+            className="mb-[clamp(0.6rem,1.8vh,1.4rem)] flex justify-center"
           >
             <span
-              aria-hidden
-              className="inline-block h-2 w-2 rounded-full bg-sophia-accent"
-              style={{ boxShadow: "0 0 12px var(--color-sophia-accent)" }}
-            />
-            <span className="font-display text-[clamp(0.75rem,1.2vw,1.1rem)] font-bold uppercase tracking-[0.24em] text-text-dim">
-              Identidades ocultas — se revelan al final
+              className="glass glass--flat flex items-center gap-[0.7em] px-[1.1em] py-[0.55em] font-display text-proj-label font-extrabold uppercase leading-none tracking-[0.18em] text-text/80"
+              style={{ borderRadius: 9999 }}
+              data-mascot-keepout="badge"
+            >
+              <svg viewBox="0 0 24 24" className="h-[1.05em] w-auto shrink-0 text-ey-yellow" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="4" y="11" width="16" height="10" rx="2.5" />
+                <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+              </svg>
+              Identidades ocultas
+              <Sep className="mx-[0.2em]!" />
+              se revelan al final
             </span>
           </motion.div>
         )}
@@ -400,38 +493,20 @@ const LiveStage = memo(function LiveStage({
         )}
         </div>
       </div>
-    </div>
-  );
-});
 
-const ConnectionDot = memo(function ConnectionDot({
-  state,
-}: {
-  state: ConnectionState;
-}) {
-  const live = state === "live";
-  const color = live
-    ? "var(--color-power-green)"
-    : state === "reconnecting"
-      ? "var(--color-ey-yellow)"
-      : "var(--color-ey-gray1)";
-  const label =
-    state === "live"
-      ? "En directo"
-      : state === "reconnecting"
-        ? "Reconectando…"
-        : "Conectando…";
-  return (
-    <span className="flex items-center gap-2 text-[clamp(0.7rem,1vw,0.95rem)] font-semibold uppercase tracking-[0.15em] text-text-dim">
-      <motion.span
-        animate={live ? { opacity: [1, 0.4, 1] } : { opacity: 0.7 }}
-        transition={live ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" } : undefined}
-        className="inline-block h-2.5 w-2.5 rounded-full"
-        style={{ backgroundColor: color }}
-        aria-hidden
-      />
-      {label}
-    </span>
+      {/* Lower third on the open entry: bottom-left of the frame, over the
+          rail's free foot (never over the chart, the QR or the countdown). */}
+      {fresh && (
+        <LowerThird
+          kicker="En directo"
+          title="¡Votación abierta!"
+          body="Elige equipo y mantén pulsado"
+          reduced={reduced}
+          delayMs={reduced ? 300 : 1000}
+          className="absolute bottom-[clamp(0.5rem,1.4vh,1.2rem)] left-[clamp(1.25rem,3vw,3rem)] z-20"
+        />
+      )}
+    </div>
   );
 });
 
