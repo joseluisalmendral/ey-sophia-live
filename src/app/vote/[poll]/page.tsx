@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { INTERVAL_DEFAULTS } from "@/lib/assistant/scheduler";
 import type { Poll, PollStatus, Team } from "@/lib/types";
 import { VoteClient } from "./VoteClient";
 
@@ -34,7 +35,17 @@ interface PollRow {
   join_code: string;
   created_at: string;
   run_seq: number;
+  assistant_enabled?: boolean | null;
 }
+
+const POLL_COLUMNS =
+  "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at, run_seq";
+/**
+ * Phones read ONLY `assistant_enabled` at SSR (the future phone mini-mascot
+ * just needs to know it should stay quiet) — no pacing config, no new
+ * requests. Selected separately so a pre-migration DB falls back cleanly.
+ */
+const ASSISTANT_COLUMNS = "assistant_enabled";
 
 interface TeamRow {
   id: string;
@@ -58,6 +69,11 @@ function mapPoll(r: PollRow): Poll {
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
+    assistantEnabled: r.assistant_enabled ?? true,
+    // Phones never schedule Broqui themselves (projector-only); the shared
+    // Poll type still needs these fields, so ship the scheduler defaults.
+    assistantMinSeconds: INTERVAL_DEFAULTS.min,
+    assistantMaxSeconds: INTERVAL_DEFAULTS.max,
   };
 }
 
@@ -92,13 +108,22 @@ export default async function VotePage({
   const column = UUID_RE.test(pollParam) ? "id" : "join_code";
   const value = column === "join_code" ? pollParam.toUpperCase() : pollParam;
 
-  const { data: pollData, error: pollErr } = await supabase
+  let { data: pollData, error: pollErr } = await supabase
     .from("polls")
-    .select(
-      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at, run_seq",
-    )
+    .select(`${POLL_COLUMNS}, ${ASSISTANT_COLUMNS}`)
     .eq(column, value)
     .maybeSingle<PollRow>();
+
+  // SAFE FALLBACK: pre-migration DB (assistant_enabled missing) — retry
+  // without it and let mapPoll default to enabled:true, rather than 404ing
+  // every voter.
+  if (pollErr) {
+    ({ data: pollData, error: pollErr } = await supabase
+      .from("polls")
+      .select(POLL_COLUMNS)
+      .eq(column, value)
+      .maybeSingle<PollRow>());
+  }
 
   if (pollErr || !pollData) {
     notFound();

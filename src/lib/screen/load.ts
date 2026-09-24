@@ -4,6 +4,7 @@ import {
   anonymizeIdentities,
   buildPositionIndex,
 } from "@/components/screen/anonymize";
+import { INTERVAL_DEFAULTS } from "@/lib/assistant/scheduler";
 import type { Poll, PollStatus, Team } from "@/lib/types";
 
 /**
@@ -38,7 +39,17 @@ interface PollRow {
   tie_rule: Poll["tieRule"];
   join_code: string;
   created_at: string;
+  assistant_enabled?: boolean | null;
+  assistant_min_interval_s?: number | null;
+  assistant_max_interval_s?: number | null;
 }
+
+const POLL_COLUMNS =
+  "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at";
+/** WP4 assistant settings — selected separately so a pre-migration DB (missing
+ * these columns) can fall back to {enabled:true,14,28} instead of failing. */
+const ASSISTANT_COLUMNS =
+  "assistant_enabled, assistant_min_interval_s, assistant_max_interval_s";
 
 interface TeamRow {
   id: string;
@@ -61,6 +72,9 @@ function mapPoll(r: PollRow): Poll {
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
+    assistantEnabled: r.assistant_enabled ?? true,
+    assistantMinSeconds: r.assistant_min_interval_s ?? INTERVAL_DEFAULTS.min,
+    assistantMaxSeconds: r.assistant_max_interval_s ?? INTERVAL_DEFAULTS.max,
   };
 }
 
@@ -97,13 +111,23 @@ export async function loadScreenData(
   const column = UUID_RE.test(pollParam) ? "id" : "join_code";
   const value = column === "join_code" ? pollParam.toUpperCase() : pollParam;
 
-  const { data: pollData, error: pollErr } = await supabase
+  let { data: pollData, error: pollErr } = await supabase
     .from("polls")
-    .select(
-      "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at",
-    )
+    .select(`${POLL_COLUMNS}, ${ASSISTANT_COLUMNS}`)
     .eq(column, value)
     .maybeSingle<PollRow>();
+
+  // SAFE FALLBACK: an environment whose DB has not run the E4 migration yet
+  // (assistant_* columns missing) would fail the whole select — retry without
+  // them and let mapPoll apply the {enabled:true,14,28} defaults instead of
+  // breaking the projector.
+  if (pollErr) {
+    ({ data: pollData, error: pollErr } = await supabase
+      .from("polls")
+      .select(POLL_COLUMNS)
+      .eq(column, value)
+      .maybeSingle<PollRow>());
+  }
 
   if (pollErr || !pollData) return null;
 

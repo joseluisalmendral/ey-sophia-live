@@ -448,6 +448,9 @@ export class LabEngine {
       tieRule: settings.tieRule,
       joinCode: scenario.joinCode,
       createdAt: "2026-09-24T17:00:00.000Z",
+      assistantEnabled: settings.assistant.enabled,
+      assistantMinSeconds: settings.assistant.minIntervalS,
+      assistantMaxSeconds: settings.assistant.maxIntervalS,
     };
     return {
       runId: this.runId,

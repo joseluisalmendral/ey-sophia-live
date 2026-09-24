@@ -26,6 +26,9 @@ export interface AdminPoll {
   tieRule: TieRule;
   joinCode: string;
   createdAt: string;
+  assistantEnabled: boolean;
+  assistantMinSeconds: number;
+  assistantMaxSeconds: number;
 }
 
 interface AdminPollRow {
@@ -43,10 +46,13 @@ interface AdminPollRow {
   tie_rule: TieRule;
   join_code: string;
   created_at: string;
+  assistant_enabled: boolean;
+  assistant_min_interval_s: number;
+  assistant_max_interval_s: number;
 }
 
 const POLL_COLUMNS =
-  "id, title, status, countdown_seconds, duration_seconds, opens_at, closes_at, chart_type, show_legend, show_names, anonymous_display, tie_rule, join_code, created_at";
+  "id, title, status, countdown_seconds, duration_seconds, opens_at, closes_at, chart_type, show_legend, show_names, anonymous_display, tie_rule, join_code, created_at, assistant_enabled, assistant_min_interval_s, assistant_max_interval_s";
 
 function mapPoll(r: AdminPollRow): AdminPoll {
   return {
@@ -64,6 +70,9 @@ function mapPoll(r: AdminPollRow): AdminPoll {
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
+    assistantEnabled: r.assistant_enabled,
+    assistantMinSeconds: r.assistant_min_interval_s,
+    assistantMaxSeconds: r.assistant_max_interval_s,
   };
 }
 

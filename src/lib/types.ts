@@ -47,6 +47,16 @@ export interface Poll {
   /** Short, memorable join code shown on the projector. */
   joinCode: string;
   createdAt: string;
+  /**
+   * Live on/off switch for the projector-only Broqui co-host (mascot).
+   * Toggled from admin Live Control; the projector re-polls it every ~5s via
+   * `/api/poll/[id]/assistant` (see MascotHost/useAssistantConfig).
+   */
+  assistantEnabled: boolean;
+  /** Minimum seconds between Broqui ambient lines (6-120; see scheduler.ts). */
+  assistantMinSeconds: number;
+  /** Maximum seconds between Broqui ambient lines (>= min + 2; 8-120). */
+  assistantMaxSeconds: number;
 }
 
 /** A team competing in a poll. Maps to the `teams` table. */
