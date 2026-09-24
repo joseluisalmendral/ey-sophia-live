@@ -3,26 +3,32 @@
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ShaderBackground } from "@/components/providers/ShaderBackground";
+import { PhoneMascot } from "@/components/mascot/PhoneMascot";
 import { durations, easings } from "@/lib/motion/tokens";
 import type { Poll, Team } from "@/lib/types";
-import type { Phase } from "./phase";
-import { COPY } from "./views/shared";
+import type { Phase, RankingEntry } from "./phase";
+import { PhoneHeader } from "./views/shared";
+import { LobbyView } from "./views/LobbyView";
 import { VotingView } from "./views/VotingView";
+import { HoldConfirmButton } from "./views/HoldConfirmButton";
 import { ConfirmView } from "./views/ConfirmView";
 import { AlreadyVotedView } from "./views/AlreadyVotedView";
 import { ClosedView } from "./views/ClosedView";
 import { RevealView } from "./views/RevealView";
+import "./vote.css";
 
 /**
  * VoteShell — the PRESENTATIONAL voter experience (no data hooks, no network).
  *
- * A switch over the derived `phase` that renders the shader stage, the sticky
- * CTA (only while voting), and the matching view. Fed by VoteClient in
- * production (useVoteFlow) and by the /lab phone personas (fake submit).
+ * A switch over the derived `phase` that renders the shader stage, the compact
+ * brand header, the phone co-host row (Broqui, when the poll has the assistant
+ * enabled), the matching view and — while voting — the sticky hold-to-confirm
+ * CTA. Fed by VoteClient in production (useVoteFlow) and by the /lab phone
+ * personas (fake submit).
  *
- * Accessibility: real <button>s with aria-pressed, focus-visible (global ring),
- * contrast via pickTextOn, full reduced-motion path (no scale/burst/haptics ->
- * crossfades).
+ * Accessibility: real buttons (radio semantics on the cards), focus-visible
+ * (global ring), contrast via pickTextOn, Enter/Space confirm instantly, full
+ * reduced-motion path (crossfades, no burst/wiggle, stepped hold fill).
  */
 
 export interface VoteShellProps {
@@ -39,8 +45,10 @@ export interface VoteShellProps {
   error: string | null;
   /** Team of a fresh 'ok' vote in this session; null otherwise. */
   votedTeam: Team | null;
-  /** Personal dense rank of votedTeam at reveal; null = neutral reveal. */
+  /** Personal rank of votedTeam at reveal; null = neutral reveal. */
   rank: number | null;
+  /** Final ranked list for the personal result (same one-shot fetch); null = none. */
+  ranking?: readonly RankingEntry[] | null;
   totalTeams: number;
   /** The submit bounced with 'closed' (honest "just missed" copy). */
   justMissed: boolean;
@@ -48,8 +56,9 @@ export interface VoteShellProps {
   closesAt: string | null;
   reduced: boolean;
   /**
-   * Phone mascot mount point: rendered inside <main>, OUTSIDE the phase
-   * AnimatePresence and above the views. Default: nothing.
+   * Optional extra mount point rendered after the views (outside the phase
+   * AnimatePresence). The phone mascot itself is built in (PhoneMascot) and
+   * follows `poll.assistantEnabled`.
    */
   mascotSlot?: ReactNode;
 }
@@ -65,6 +74,7 @@ export function VoteShell({
   error,
   votedTeam,
   rank,
+  ranking = null,
   totalTeams,
   justMissed,
   opensAt,
@@ -72,20 +82,46 @@ export function VoteShell({
   reduced,
   mascotSlot = null,
 }: VoteShellProps) {
+  const selectedTeam = teams.find((t) => t.id === selectedId) ?? null;
+  const voting = phase === "voting" || phase === "submitting";
+
   return (
     <ShaderBackground>
-      <main className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col px-4 pb-32 pt-6">
+      <main
+        className={`relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col overflow-x-clip px-4 pt-[max(0.25rem,env(safe-area-inset-top))] ${
+          voting ? "pb-36" : "pb-10"
+        }`}
+      >
+        <PhoneHeader />
+
+        {poll.assistantEnabled !== false && (
+          <PhoneMascot
+            phase={phase}
+            teamName={votedTeam?.name ?? null}
+            rank={phase === "reveal" ? rank : null}
+            reduced={reduced}
+          />
+        )}
+
         <AnimatePresence mode="wait">
-          {(phase === "lobby" || phase === "voting" || phase === "submitting") && (
+          {phase === "lobby" && (
+            <LobbyView
+              key="lobby"
+              poll={poll}
+              teams={teams}
+              opensAt={opensAt}
+              reduced={reduced}
+            />
+          )}
+
+          {voting && (
             <VotingView
               key="voting"
-              poll={poll}
               teams={teams}
               phase={phase}
               selectedId={selectedId}
               onSelect={onSelect}
               reduced={reduced}
-              opensAt={opensAt}
               closesAt={closesAt}
             />
           )}
@@ -108,30 +144,30 @@ export function VoteShell({
               team={votedTeam}
               rank={rank}
               total={totalTeams}
+              ranking={ranking}
               reduced={reduced}
             />
           )}
         </AnimatePresence>
 
-        {/* Phone mascot host (E5). Outside the phase AnimatePresence. */}
         {mascotSlot}
 
         {/* Sticky thumb-zone CTA — only while voting. */}
         <AnimatePresence>
-          {(phase === "voting" || phase === "submitting") && (
+          {voting && (
             <motion.div
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
               transition={{ duration: durations.base, ease: easings.standard }}
-              className="fixed inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3"
+              className="fixed inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10"
               style={{
                 background:
-                  "linear-gradient(to top, var(--color-cosmic-deep) 30%, transparent)",
+                  "linear-gradient(to top, var(--color-cosmic-deep) 45%, rgb(11 16 38 / 0.85) 70%, transparent)",
               }}
             >
               {error && (
-                <p className="mb-2 text-center text-small text-[#FF8A8A]">
+                <p role="alert" className="mb-2 text-center text-small text-[#FF8A8A]">
                   {error}
                 </p>
               )}
@@ -142,18 +178,12 @@ export function VoteShell({
                   id="vote-reward"
                   className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
                 />
-                <button
-                  type="button"
-                  onClick={onSubmit}
-                  disabled={!selectedId || submitting}
-                  className="h-16 w-full rounded-xl bg-ey-yellow font-display text-h3 font-extrabold text-ey-confident shadow-[var(--shadow-glow-win)] transition-[transform,opacity] duration-150 ease-out active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/12 disabled:text-text-dim disabled:shadow-none"
-                >
-                  {submitting
-                    ? COPY.sending
-                    : selectedId
-                      ? COPY.cta
-                      : COPY.ctaPick}
-                </button>
+                <HoldConfirmButton
+                  team={selectedTeam}
+                  submitting={submitting}
+                  onConfirm={onSubmit}
+                  reduced={reduced}
+                />
               </div>
             </motion.div>
           )}

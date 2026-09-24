@@ -5,7 +5,7 @@ import { usePollStatus } from "@/lib/polling/usePollStatus";
 import { useLocalStatusFlip } from "@/lib/polling/useLocalStatusFlip";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { Poll, PollStatus, Team } from "@/lib/types";
-import { derivePhase, type Action, type Phase } from "./phase";
+import { denseRanking, derivePhase, type Action, type Phase, type RankingEntry } from "./phase";
 
 /**
  * useVoteFlow — the container/logic side of the voter experience.
@@ -63,6 +63,8 @@ export interface VoteFlow {
   setSelectedId: (id: string) => void;
   votedTeam: Team | null;
   myRank: number | null;
+  /** Final ranked list from the same one-shot results fetch (empty until then). */
+  ranking: RankingEntry[] | null;
   error: string | null;
   submit: () => void;
   submitting: boolean;
@@ -207,12 +209,14 @@ export function useVoteFlow(
                   y: rect.top / window.innerHeight,
                 }
               : { x: 0.5, y: 0.85 };
+            // Palette limited to the voted team + EY yellow + white.
+            const teamColor = teams.find((t) => t.id === selectedId)?.color;
             confetti({
               particleCount: 90,
               spread: 75,
               startVelocity: 45,
               origin,
-              colors: ["#FFE600", "#96d3b4", "#7DB8FF", "#FFFFFF"],
+              colors: [...(teamColor ? [teamColor, teamColor] : []), "#FFE600", "#FFFFFF"],
               disableForReducedMotion: true,
             });
           } catch {
@@ -235,7 +239,7 @@ export function useVoteFlow(
       setError("Error de conexión. Inténtalo de nuevo.");
       setAction("idle");
     }
-  }, [selectedId, poll.id, reduced]);
+  }, [selectedId, poll.id, reduced, teams]);
 
   // Personal reveal: when the poll closes AND the voter cast a known vote, fetch
   // the ranked results ONCE from the cached endpoint. Any failure degrades to
@@ -284,6 +288,20 @@ export function useVoteFlow(
     return null;
   }, [rankedResults, votedTeamId]);
 
+  // Compact ranked list for the personal result (same rule as myRank).
+  const ranking = useMemo<RankingEntry[] | null>(() => {
+    if (rankedResults.length === 0) return null;
+    return denseRanking(
+      rankedResults.map((r) => ({
+        id: r.team_id,
+        name: r.name,
+        color: r.color,
+        count: r.count,
+        position: r.team_position,
+      })),
+    );
+  }, [rankedResults]);
+
   // Total finalists is stable from the server props; fall back to the fetched
   // results length (keeps the "de N finalistas" copy correct).
   const totalTeams = teams.length || rankedResults.length;
@@ -296,6 +314,7 @@ export function useVoteFlow(
     setSelectedId,
     votedTeam,
     myRank,
+    ranking,
     error,
     submit,
     submitting: action === "submitting",

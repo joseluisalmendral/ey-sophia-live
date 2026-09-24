@@ -33,6 +33,7 @@ export function VoteClient({
     setSelectedId,
     votedTeam,
     myRank,
+    ranking,
     error,
     submit,
     submitting,
@@ -60,6 +61,7 @@ export function VoteClient({
       error={error}
       votedTeam={votedTeam}
       rank={myRank}
+      ranking={ranking}
       totalTeams={totalTeams}
       justMissed={justMissed}
       opensAt={opensAt}

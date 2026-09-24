@@ -57,3 +57,31 @@ export function derivePhase(status: PollStatus, action: Action): Phase {
       return "voting";
   }
 }
+
+/** One row of the phone's final ranked list (personal result view). */
+export interface RankingEntry {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+  /** Dense 1-based rank (ties share a rank), same rule as the personal #N. */
+  rank: number;
+}
+
+/**
+ * Dense-rank rows by count desc, then by `position` asc (stable tie order).
+ * Pure; shared by the production container and the /lab phones.
+ */
+export function denseRanking(
+  rows: readonly { id: string; name: string; color: string; count: number; position: number }[],
+): RankingEntry[] {
+  const sorted = [...rows].sort((a, b) => b.count - a.count || a.position - b.position);
+  let lastCount = Number.POSITIVE_INFINITY;
+  let lastRank = 0;
+  return sorted.map((r, i) => {
+    const rank = r.count === lastCount ? lastRank : i + 1;
+    lastCount = r.count;
+    lastRank = rank;
+    return { id: r.id, name: r.name, color: r.color, count: r.count, rank };
+  });
+}

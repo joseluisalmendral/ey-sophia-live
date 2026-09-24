@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { derivePhase } from "@/app/vote/[poll]/phase";
+import { denseRanking, derivePhase } from "@/app/vote/[poll]/phase";
 import { VoteShell } from "@/app/vote/[poll]/VoteShell";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { PollStatus } from "@/lib/types";
@@ -140,6 +140,20 @@ function LabPhoneShell({
       ? (snap.liveTeams.find((t) => t.id === state.votedTeamId)?.rank ?? null)
       : null;
 
+  // Compact ranked list for the personal result (production: same one-shot fetch).
+  const ranking =
+    phase === "reveal" && state.votedTeamId
+      ? denseRanking(
+          snap.liveTeams.map((t, i) => ({
+            id: t.id,
+            name: t.name,
+            color: t.color,
+            count: t.count,
+            position: i,
+          })),
+        )
+      : null;
+
   return (
     <LabSettingsProvider value={frame}>
       <VoteShell
@@ -153,6 +167,7 @@ function LabPhoneShell({
         error={null}
         votedTeam={votedTeam}
         rank={rank}
+        ranking={ranking}
         totalTeams={teams.length}
         justMissed={active?.justMissed ?? false}
         opensAt={snap.opensAt}

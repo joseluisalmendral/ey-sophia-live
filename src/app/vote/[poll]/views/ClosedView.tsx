@@ -1,7 +1,7 @@
 "use client";
 
-import { SophiaBanner } from "@/components/brand/SophiaBanner";
-import { COPY, ViewWrap } from "./shared";
+import { ClockIcon, COPY, ViewWrap, WatchPill } from "./shared";
+import { StatusGlyph } from "./StatusGlyph";
 
 /**
  * Neutral closed view — shown when the poll closed without a fresh vote.
@@ -17,19 +17,19 @@ export function ClosedView({
 }) {
   return (
     <ViewWrap reduced={reduced}>
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 py-10 text-center">
-        <SophiaBanner variant="confirmation" />
-        <div className="flex flex-col gap-2">
-          <h2 className="font-display text-h1 font-extrabold text-text">
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 pb-16 pt-4 text-center">
+        <StatusGlyph tone="var(--color-text-dim)" reduced={reduced}>
+          <ClockIcon size={40} />
+        </StatusGlyph>
+        <div className="flex flex-col items-center gap-2">
+          <h1 className="max-w-[19rem] text-balance font-display text-m-title font-extrabold leading-[1.1] text-text">
             {justMissed ? COPY.closedJustMissedTitle : COPY.closedTitle}
-          </h2>
-          <p className="max-w-xs text-balance text-small leading-relaxed text-text-dim">
+          </h1>
+          <p className="max-w-[18rem] text-balance text-m-body leading-snug text-text-dim">
             {justMissed ? COPY.closedJustMissedSub : COPY.closedSub}
           </p>
         </div>
-        <span className="font-display text-body font-bold text-ey-yellow">
-          {COPY.watch}
-        </span>
+        <WatchPill reduced={reduced} delay={0.2} />
       </div>
     </ViewWrap>
   );
