@@ -216,7 +216,7 @@ export function HoldConfirmButton({
             />
           )}
           <span className="sr-only">{label}</span>
-          <span className="hold__label" aria-hidden>
+          <span className="hold__label hold__label--base" aria-hidden>
             {labelContent}
           </span>
           {team && (

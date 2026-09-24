@@ -221,24 +221,28 @@
   text-overflow: ellipsis;
 }
 
-.hold__stack {
+.hold__label > .hold__stack {
   display: flex;
   min-width: 0;
+  max-width: 100%;
   flex-direction: column;
   align-items: center;
-  line-height: 1.1;
+  /* Visible: a clipped line box would shave the accent off "MANTÉN". */
+  overflow: visible;
 }
 
 .hold__kicker {
   font-size: 0.6875rem;
   font-weight: 800;
+  line-height: 1.4;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  opacity: 0.72;
+  opacity: 0.78;
 }
 
 .hold__team {
   max-width: 100%;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -246,7 +250,24 @@
   font-weight: 800;
 }
 
-/* Label copy on top of the fill: contrast ink, revealed by the fill clip. */
+/*
+ * Dual-layer label, pixel-aligned (same box, same markup):
+ *  - base layer: light ink, readable over the dark unfilled pill;
+ *  - ink layer: team-contrast ink (pickTextOn), clipped to the filled width
+ *    by the same progress MotionValue that scales the fill.
+ */
+.hold__label--base {
+  color: var(--color-text);
+}
+
+.hold[data-state="idle"] .hold__label--base {
+  color: var(--color-text-dim);
+}
+
 .hold__label--ink {
   color: var(--ink);
+}
+
+.hold__label--ink .hold__kicker {
+  opacity: 0.9;
 }
