@@ -240,9 +240,10 @@ export function placeBubble(
     if (p.clear) return p;
   }
   // Pass 2: slide the "above" / side candidates upwards (a tighter margin,
-  // e.g. the podium) until they clear the keep-outs — up to ~35 % of the frame.
-  const step = frame.h * 0.05;
-  for (let i = 1; i <= 7; i++) {
+  // e.g. the podium) until they clear the keep-outs — up to ~35 % of the
+  // frame, in fine steps so the bubble stays as close to the mouth as it can.
+  const step = frame.h * 0.025;
+  for (let i = 1; i <= 14; i++) {
     for (const side of order) {
       if (side === "below") continue;
       const r0 = candidate(side);

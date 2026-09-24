@@ -191,6 +191,8 @@ const BASE_SIZE_1080 = 200;
 const STEP_MS = 120;
 const ROAM_IDLE_MS: [number, number] = [25_000, 40_000];
 const PODIUM_SETTLE_MS = 1200;
+/** Length of Broqui's "dance" beat (jump + spin + 4 hops + settle). */
+const PODIUM_DANCE_MS = 2400;
 const EMPTY_TEAMS: RankedTeam[] = [];
 
 type Mode = "hidden" | "entering" | "idle" | "travelling" | "exiting" | "peeking" | "speaking";
@@ -562,7 +564,8 @@ export function MascotHost(props: MascotHostProps) {
           return "idle";
         }
         case "podium":
-          return now() - S.stageEnteredAt < 5000 ? "celebrating" : "idle";
+          // Celebrating until the dance lands, then the smug co-host idle.
+          return S.podiumSettled ? "smug" : "celebrating";
         case "reveal-suspense":
           return "nervous";
         default:
@@ -885,8 +888,17 @@ export function MascotHost(props: MascotHostProps) {
         setExpression("celebrating");
         await enterAt(home, g);
         if (!live(g)) return;
-        fire("celebrate");
+        // WP11: mini-dance on the winner-sting pulse (jump + spin + sparkles,
+        // four hops), holding the line until it lands; then the smug idle and
+        // the reveal_winner punchline (detectEvents waits for podiumSettled).
+        S.mode = "entering";
+        fire("dance");
+        await wait(red() ? 1200 : PODIUM_DANCE_MS);
+        if (!live(g)) return;
+        S.mode = "idle";
+        S.arrivedAt = now();
         S.podiumSettled = true;
+        setExpression("smug");
         return;
       }
       // lobby / countin / live: keep the anchor when it still applies, else travel.

@@ -27,6 +27,7 @@ const ACTIONS: { type: BroquiActionType; label: string }[] = [
   { type: "surprise", label: "Sorpresa" },
   { type: "laugh", label: "Risa" },
   { type: "celebrate", label: "Celebrar" },
+  { type: "dance", label: "Bailar" },
   { type: "squeeze", label: "Apretar ojos" },
   { type: "peek", label: "Asomarse" },
   { type: "enter", label: "Entrar" },

@@ -15,8 +15,8 @@
  *     lookAt={{ x: 0.3, y: -0.2 }}     // normalised -1..1 (null = ambient glances)
  *     action={{ type: "surprise", key: 1 }}
  *                                      // one-shot beat, re-fires when `key` changes:
- *                                      // "surprise" | "celebrate" | "laugh" | "enter"
- *                                      // | "exit" | "peek" | "squeeze";
+ *                                      // "surprise" | "celebrate" | "dance" | "laugh"
+ *                                      // | "enter" | "exit" | "peek" | "squeeze";
  *                                      // optional `from: "left" | "right" | "bottom"`
  *                                      // for enter / exit / peek (default "right")
  *     reduced={false}                  // static poses + 200 ms fades (pass the
@@ -106,6 +106,7 @@ import {
   type Expression,
   type Pose,
 } from "./expressions";
+import { WINNER_STING_STEP_MS } from "@/lib/effects/winnerSting";
 import "./broqui.css";
 
 export { EXPRESSIONS, EXPRESSION_LABELS };
@@ -114,6 +115,7 @@ export type { Expression };
 export type BroquiActionType =
   | "surprise"
   | "celebrate"
+  | "dance"
   | "laugh"
   | "enter"
   | "exit"
@@ -167,6 +169,20 @@ const spring = (stiffness: number, damping: number, mass = 1): Transition => ({
   stiffness,
   damping,
   mass,
+});
+
+/**
+ * Bloom stack around the shield: 16 concentric strokes from 66 px down to
+ * 9 px whose per-layer opacity follows a smooth curve, so the cumulative
+ * alpha fades like a Gaussian halo instead of stepping between 5 visible
+ * rings. Static paths — zero filters, zero per-frame cost.
+ */
+const BLOOM_LAYERS: readonly { w: number; o: number }[] = Array.from({ length: 16 }, (_, i) => {
+  const t = i / 15; // 0 = widest / faintest, 1 = tightest / brightest
+  return {
+    w: Math.round((9 + 57 * (1 - t) ** 1.35) * 10) / 10,
+    o: Math.round((0.008 + 0.2 * t ** 2.4) * 1000) / 1000,
+  };
 });
 
 const SPRING_POSE = spring(170, 20, 1);
@@ -598,6 +614,66 @@ export function Broqui({
           ? size + 120 * k
           : width + 120 * k;
 
+    /** Reduced motion: bloom pulse + sparkles only, no jump. */
+    const sparkleOnly = async () => {
+      animate(rig.bloomPulse, [1, 1.15, 1], { duration: 0.9 });
+      rig.sparkles.forEach((sp, i) => {
+        setTimeout(() => {
+          sp.s.set(1);
+          animate(sp.o, [0, 1, 0], { duration: 0.6 });
+        }, i * 70);
+      });
+      await wait(1100);
+    };
+    /** The celebrate beat: squat → ascent + spin + sparkles → landing squash. */
+    const jumpSpin = async () => {
+      animate(rig.arc, 0, { duration: 0.1 });
+      animate(rig.eyeActSx, 1.1, { duration: 0.12 });
+      animate(rig.eyeActSy, 1.15, { duration: 0.12 });
+      // squat
+      const squat = { duration: 0.12, ease: [0.3, 0, 0.6, 1] } as Transition;
+      animate(rig.actSx, 1.1, squat);
+      await animate(rig.actSy, 0.86, squat);
+      if (!live()) return;
+      // ascent + spin
+      const up = { duration: 0.26, ease: [0.2, 0, 0.1, 1] } as Transition;
+      animate(rig.actSx, 0.92, up);
+      animate(rig.actSy, 1.14, up);
+      animate(rig.rootRot, [0, 360], {
+        duration: 0.5,
+        ease: [0.3, 0, 0.2, 1],
+      });
+      animate(rig.lines, [0, 1, 0], { duration: 0.5, times: [0, 0.4, 1] });
+      rig.sparkles.forEach((sp, i) => {
+        setTimeout(() => {
+          if (!live()) return;
+          sp.o.set(1);
+          animate(sp.s, [0, 1, 0], { duration: 0.52, ease: "easeOut" });
+          animate(sp.r, [0, 90], { duration: 0.52 });
+        }, 180 + i * 70);
+      });
+      await animate(rig.rootY, -90 * k, up);
+      if (!live()) return;
+      animate(rig.actSx, 1, { duration: 0.06 });
+      animate(rig.actSy, 1, { duration: 0.06 });
+      await wait(60); // hang
+      if (!live()) return;
+      const down = { duration: 0.22, ease: [0.6, 0, 1, 1] } as Transition;
+      animate(rig.actSx, 0.94, down);
+      animate(rig.actSy, 1.08, down);
+      await animate(rig.rootY, 0, down);
+      if (!live()) return;
+      // landing squash + follow-through
+      rig.rootRot.set(0);
+      animate(rig.actSx, [1.14, 1], spring(300, 14, 1));
+      animate(rig.actSy, [0.84, 1], spring(300, 14, 1));
+      animate(rig.shadowLand, [1.3, 1], spring(300, 16, 1));
+      animate(rig.bloomPulse, [1.15, 1], { duration: 0.6 });
+      animate(rig.eyeActSx, 1, spring(300, 20, 1));
+      animate(rig.eyeActSy, 1, spring(300, 20, 1));
+      await animate(rig.arc, POSES[exprRef.current].arc, { duration: 0.2 });
+    };
+
     switch (type) {
       case "surprise": {
         if (red) {
@@ -664,61 +740,53 @@ export function Broqui({
       }
       case "celebrate": {
         if (red) {
-          animate(rig.bloomPulse, [1, 1.15, 1], { duration: 0.9 });
-          rig.sparkles.forEach((sp, i) => {
-            setTimeout(() => {
-              sp.s.set(1);
-              animate(sp.o, [0, 1, 0], { duration: 0.6 });
-            }, i * 70);
-          });
-          await wait(1100);
+          await sparkleOnly();
           break;
         }
-        animate(rig.arc, 0, { duration: 0.1 });
-        animate(rig.eyeActSx, 1.1, { duration: 0.12 });
-        animate(rig.eyeActSy, 1.15, { duration: 0.12 });
-        // squat
-        const squat = { duration: 0.12, ease: [0.3, 0, 0.6, 1] } as Transition;
-        animate(rig.actSx, 1.1, squat);
-        await animate(rig.actSy, 0.86, squat);
+        await jumpSpin();
+        break;
+      }
+      case "dance": {
+        // WP11 podium mini-dance on the winner-sting pulse: the celebrate
+        // jump + spin, then four side hops with a tilt (two sting notes per
+        // hop), a sparkle ring on the 2nd and 4th landing, and a settle.
+        if (red) {
+          await sparkleOnly();
+          break;
+        }
+        await jumpSpin();
         if (!live()) break;
-        // ascent + spin
-        const up = { duration: 0.26, ease: [0.2, 0, 0.1, 1] } as Transition;
-        animate(rig.actSx, 0.92, up);
-        animate(rig.actSy, 1.14, up);
-        animate(rig.rootRot, [0, 360], {
-          duration: 0.5,
-          ease: [0.3, 0, 0.2, 1],
-        });
-        animate(rig.lines, [0, 1, 0], { duration: 0.5, times: [0, 0.4, 1] });
-        rig.sparkles.forEach((sp, i) => {
-          setTimeout(() => {
-            if (!live()) return;
-            sp.o.set(1);
-            animate(sp.s, [0, 1, 0], { duration: 0.52, ease: "easeOut" });
-            animate(sp.r, [0, 90], { duration: 0.52 });
-          }, 180 + i * 70);
-        });
-        await animate(rig.rootY, -90 * k, up);
+        const hop = (WINNER_STING_STEP_MS * 2) / 1000;
+        const half = hop / 2;
+        for (let i = 0; i < 4 && live(); i++) {
+          const dir = i % 2 === 0 ? 1 : -1;
+          animate(rig.actRot, 9 * dir, { duration: half, ease: "easeOut" });
+          animate(rig.actSx, 0.95, { duration: half });
+          animate(rig.actSy, 1.06, { duration: half });
+          await animate(rig.rootY, -26 * k, { duration: half, ease: [0.2, 0, 0.4, 1] });
+          if (!live()) break;
+          animate(rig.actSx, 1.06, { duration: half });
+          animate(rig.actSy, 0.95, { duration: half });
+          await animate(rig.rootY, 0, { duration: half, ease: [0.6, 0, 1, 1] });
+          if (!live()) break;
+          animate(rig.shadowLand, [1.18, 1], { duration: 0.2 });
+          if (i % 2 === 1) {
+            animate(rig.bloomPulse, [1.12, 1], { duration: 0.4 });
+            rig.sparkles.forEach((sp, j) => {
+              setTimeout(() => {
+                if (!live()) return;
+                sp.o.set(1);
+                animate(sp.s, [0, 1, 0], { duration: 0.46, ease: "easeOut" });
+                animate(sp.r, [0, 90], { duration: 0.46 });
+              }, j * 40);
+            });
+          }
+        }
         if (!live()) break;
-        animate(rig.actSx, 1, { duration: 0.06 });
-        animate(rig.actSy, 1, { duration: 0.06 });
-        await wait(60); // hang
-        if (!live()) break;
-        const down = { duration: 0.22, ease: [0.6, 0, 1, 1] } as Transition;
-        animate(rig.actSx, 0.94, down);
-        animate(rig.actSy, 1.08, down);
-        await animate(rig.rootY, 0, down);
-        if (!live()) break;
-        // landing squash + follow-through
-        rig.rootRot.set(0);
-        animate(rig.actSx, [1.14, 1], spring(300, 14, 1));
-        animate(rig.actSy, [0.84, 1], spring(300, 14, 1));
-        animate(rig.shadowLand, [1.3, 1], spring(300, 16, 1));
-        animate(rig.bloomPulse, [1.15, 1], { duration: 0.6 });
-        animate(rig.eyeActSx, 1, spring(300, 20, 1));
-        animate(rig.eyeActSy, 1, spring(300, 20, 1));
-        await animate(rig.arc, POSES[exprRef.current].arc, { duration: 0.2 });
+        animate(rig.actRot, 0, spring(220, 16, 1));
+        animate(rig.actSx, 1, spring(300, 14, 1));
+        animate(rig.actSy, 1, spring(300, 14, 1));
+        await wait(300);
         break;
       }
       case "enter": {
@@ -1214,11 +1282,11 @@ export function Broqui({
 
               {/* ---------------- body ---------------- */}
               <g>
-                {/* outer cyan bloom spill (stacked wide strokes = pre-blurred, no filter) */}
-                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="64" opacity="0.04" />
-                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="42" opacity="0.06" />
-                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="26" opacity="0.1" />
-                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="13" opacity="0.17" />
+                {/* outer cyan bloom spill: a dense stack of wide strokes on a
+                    smooth falloff (pre-blurred, no filter, no visible rings) */}
+                {BLOOM_LAYERS.map((layer) => (
+                  <path key={layer.w} d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth={layer.w} opacity={layer.o} />
+                ))}
                 <path d={SHIELD} fill="none" stroke="#7dfbe6" strokeWidth="6" opacity="0.34" />
                 {/* rim band + glowing cyan edge */}
                 <path d={SHIELD} fill={`url(#${id("band")})`} stroke={`url(#${id("edge")})`} strokeWidth="3.5" />
