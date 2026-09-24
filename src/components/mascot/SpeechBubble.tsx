@@ -196,4 +196,61 @@ export function SpeechBubble({
   );
 }
 
+/**
+ * PhoneSpeechBubble — the phone variant (spec §4.7): same near-white card and
+ * mint edge, but laid out in flow next to the mini mascot (no keep-out
+ * placement), 16 px type, 18 px radius, tail pointing at the mascot on the
+ * left. Words reveal at 90 ms/word; reduced motion shows the text whole.
+ * Timing of dwell/exit is owned by the caller (it remounts one per line).
+ */
+export function PhoneSpeechBubble({
+  text,
+  reduced,
+}: {
+  text: string;
+  reduced: boolean;
+}) {
+  const words = useMemo(() => wordsOf(text), [text]);
+  const [revealed, setRevealed] = useState(reduced ? Infinity : 0);
+
+  useEffect(() => {
+    if (reduced || words.length === 0) return;
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setRevealed(i);
+      if (i >= words.length) clearInterval(id);
+    }, WORD_MS);
+    return () => clearInterval(id);
+  }, [reduced, words.length]);
+
+  return (
+    <motion.div
+      className="bubble bubble--phone"
+      data-side="right"
+      data-mascot-bubble=""
+      initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.6, x: -6 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={
+        reduced
+          ? { opacity: 0, transition: { duration: 0.2 } }
+          : { opacity: 0, scale: 0.92, transition: { duration: BUBBLE_EXIT_MS / 1000, ease: [0.3, 0, 1, 1] } }
+      }
+      transition={reduced ? { duration: 0.2 } : springs.bubble}
+      style={{ transformOrigin: "0% 50%" }}
+      aria-live="polite"
+    >
+      <span className="bubble-text">
+        {words.map((w, i) => (
+          <span key={`${i}-${w}`} className="bubble-word" data-hidden={i < revealed ? "false" : "true"}>
+            {w}
+            {i < words.length - 1 ? " " : ""}
+          </span>
+        ))}
+      </span>
+      <span className="bubble-tail" aria-hidden style={{ top: "50%" }} />
+    </motion.div>
+  );
+}
+
 export default SpeechBubble;

@@ -1,0 +1,40 @@
+/*
+ * Phone host row: mini Broqui (left) + phone bubble (right). The row height
+ * and the mascot scale switch between "host" (lobby, confirm, results) and
+ * "compact" (voting) — transform for the mascot, one layout tween for the row.
+ */
+
+.phone-mascot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+  overflow: visible;
+}
+
+.phone-mascot__poke {
+  position: relative;
+  flex-shrink: 0;
+  transform-origin: 0% 50%;
+  border-radius: 9999px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.phone-mascot__bubble {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  padding-left: 6px; /* room for the tail */
+}
+
+/* Off-screen: freeze the CSS life layer (float / sway / breathe / glow). */
+.phone-mascot[data-paused="true"] *,
+.phone-mascot[data-paused="true"] *::before,
+.phone-mascot[data-paused="true"] *::after {
+  animation-play-state: paused !important;
+}

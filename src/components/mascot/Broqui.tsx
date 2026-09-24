@@ -416,7 +416,8 @@ function createRig(size0: number) {
   );
   const ellRy = derive(
     [b.openRy, openAmt],
-    () => b.openRy.get() * openAmt.get() + 0.01,
+    // Spring undershoot can dip below 0; an SVG ry must stay positive.
+    () => Math.max(0.01, b.openRy.get() * openAmt.get() + 0.01),
   );
 
   const derived = {
