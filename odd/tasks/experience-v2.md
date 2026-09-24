@@ -43,7 +43,8 @@ xp/00-director-notes.md · xp/01-app-map.md · xp/05-ux-spec.md (UX/UI + mascot 
 - Real /screen and /vote still work against prod DB (E2E on throwaway poll), lint + build clean, reduced motion degrades cleanly.
 
 ## Progress / evidence
-(pending)
+- Comedy pool (scratchpad xp/08-lines.es.ts): 391 lines, tsc strict OK, validator OK (max 88 chars expanded, anonSafe lines never carry name placeholders/colour words), 26% fy27 pack. anonSafe 65% accepted (lobby/count-in/suspense cannot carry names).
+- E1: e9d001a tokens+glass, dff500f Broqui rig (13 expressions incl. squeeze) + /lab/mascot; lint 0 errors, build OK, screenshots qa-e1/. Lead review: expressions approved; glass look pass requested (darker body, fading teal halo with top-right yellow-green only, cyan bloom).
 
 ## Next step
 E1.
