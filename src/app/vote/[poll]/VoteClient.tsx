@@ -34,6 +34,7 @@ export function VoteClient({
     votedTeam,
     myRank,
     ranking,
+    revealArmed,
     error,
     submit,
     submitting,
@@ -62,6 +63,7 @@ export function VoteClient({
       votedTeam={votedTeam}
       rank={myRank}
       ranking={ranking}
+      revealArmed={revealArmed}
       totalTeams={totalTeams}
       justMissed={justMissed}
       opensAt={opensAt}

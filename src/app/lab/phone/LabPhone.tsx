@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { denseRanking, derivePhase } from "@/app/vote/[poll]/phase";
+import { derivePhase, projectorRanking } from "@/app/vote/[poll]/phase";
+import {
+  PHONE_REVEAL_HOLD_MS,
+  PHONE_REVEAL_HOLD_REDUCED_MS,
+  useRevealHold,
+} from "@/app/vote/[poll]/revealHold";
 import { VoteShell } from "@/app/vote/[poll]/VoteShell";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { PollStatus } from "@/lib/types";
@@ -133,17 +138,17 @@ function LabPhoneShell({
   }, [post, persona, phase, manual]);
 
   const votedTeam = teams.find((t) => t.id === state.votedTeamId) ?? null;
-  // Personal rank: production fetches it once after close; the lab reads the
-  // final ranked tally from the snapshot.
-  const rank =
+  // Projector-first hold, measured from this phone's reveal entry. The lab
+  // projector runs in the same browser, so its reduced-motion arc is known.
+  const revealArmed = useRevealHold(
+    phase === "reveal",
+    reduced ? PHONE_REVEAL_HOLD_REDUCED_MS : PHONE_REVEAL_HOLD_MS,
+  );
+  // Personal rank + list: production fetches them once after close; the lab
+  // ranks the final snapshot tally with the same projector-consistent rule.
+  const placed =
     phase === "reveal" && state.votedTeamId
-      ? (snap.liveTeams.find((t) => t.id === state.votedTeamId)?.rank ?? null)
-      : null;
-
-  // Compact ranked list for the personal result (production: same one-shot fetch).
-  const ranking =
-    phase === "reveal" && state.votedTeamId
-      ? denseRanking(
+      ? projectorRanking(
           snap.liveTeams.map((t, i) => ({
             id: t.id,
             name: t.name,
@@ -151,8 +156,11 @@ function LabPhoneShell({
             count: t.count,
             position: i,
           })),
+          poll.tieRule,
         )
       : null;
+  const rank = placed?.ranking.find((r) => r.id === state.votedTeamId)?.rank ?? null;
+  const ranking = placed && !placed.splitLead ? placed.ranking : null;
 
   return (
     <LabSettingsProvider value={frame}>
@@ -168,6 +176,7 @@ function LabPhoneShell({
         votedTeam={votedTeam}
         rank={rank}
         ranking={ranking}
+        revealArmed={revealArmed}
         totalTeams={teams.length}
         justMissed={active?.justMissed ?? false}
         opensAt={snap.opensAt}

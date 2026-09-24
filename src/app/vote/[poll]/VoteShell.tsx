@@ -49,6 +49,12 @@ export interface VoteShellProps {
   rank: number | null;
   /** Final ranked list for the personal result (same one-shot fetch); null = none. */
   ranking?: readonly RankingEntry[] | null;
+  /**
+   * Projector-first gate (see ../revealHold): false while the projector's
+   * reveal arc is still running. Until true the phone shows a suspense state
+   * and Broqui stays nervous — no rank, no list, no winner line.
+   */
+  revealArmed: boolean;
   totalTeams: number;
   /** The submit bounced with 'closed' (honest "just missed" copy). */
   justMissed: boolean;
@@ -75,6 +81,7 @@ export function VoteShell({
   votedTeam,
   rank,
   ranking = null,
+  revealArmed,
   totalTeams,
   justMissed,
   opensAt,
@@ -98,7 +105,8 @@ export function VoteShell({
           <PhoneMascot
             phase={phase}
             teamName={votedTeam?.name ?? null}
-            rank={phase === "reveal" ? rank : null}
+            rank={phase === "reveal" && revealArmed ? rank : null}
+            revealHeld={phase === "reveal" && !revealArmed}
             reduced={reduced}
           />
         )}
@@ -145,6 +153,7 @@ export function VoteShell({
               rank={rank}
               total={totalTeams}
               ranking={ranking}
+              armed={revealArmed}
               reduced={reduced}
             />
           )}

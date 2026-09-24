@@ -54,6 +54,8 @@ export const COPY = {
   revealRank: "Tu equipo quedó",
   revealChampion: "¡Campeones!",
   revealOf: (n: number) => `de ${n} finalistas`,
+  revealHoldTitle: "El resultado sale allí primero…",
+  revealHoldSub: "Después verás aquí el puesto de tu equipo.",
   votes: (n: number) => (n === 1 ? "1 voto" : `${n} votos`),
 } as const;
 

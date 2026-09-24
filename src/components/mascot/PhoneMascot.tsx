@@ -16,7 +16,9 @@
  *   - confirm: `phone_confirm`, then `phone_wait` every U[20,30] s;
  *   - alreadyVoted: `phone_already`, then `phone_wait` (anon-safe only: no team known);
  *   - closedNoVote: one `phone_closed` line;
- *   - reveal: expression by rank + one `phone_reveal_{1|2|3|n}` line.
+ *   - reveal: nervous and silent while the projector reveals first
+ *     (`revealHeld`), then expression by rank + one `phone_reveal_{1|2|3|n}`
+ *     line once the rank arrives (never before the projector podium).
  * Poke: tapping Broqui plays surprise/laugh (haptic 8 ms); a `phone_poke`
  * line on the first tap and every 3rd, max one poke line per 4 s.
  *
@@ -36,9 +38,12 @@ import { mulberry32, uniform, type Rng } from "@/lib/assistant/rng";
 import type { Phase } from "@/app/vote/[poll]/phase";
 import "./phone-mascot.css";
 
-/** Reveal choreography (kept in sync with RevealView's 600 ms delay + slam). */
-const REVEAL_POSE_MS = 600 + 300;
-const REVEAL_LINE_MS = 600 + 1100;
+/**
+ * Reveal choreography, relative to the rank arriving (RevealView shows the
+ * rank block at that moment and slams the #N in ~260 ms later).
+ */
+const REVEAL_POSE_MS = 300 + 300;
+const REVEAL_LINE_MS = 300 + 1100;
 const REVEAL_CONSOLE_MS = 1200;
 /** Confirm moment → calm wait (ConfirmView's CONFIRM_MOMENT_MS). */
 const CONFIRM_SETTLE_MS = 2500;
@@ -91,7 +96,12 @@ function revealCategory(rank: number): LineCategory {
 }
 
 /** Phase-driven resting pose (step = sub-beat inside the phase). */
-function restingPose(phase: Phase, step: number, rank: number | null): Expression {
+function restingPose(
+  phase: Phase,
+  step: number,
+  rank: number | null,
+  revealHeld: boolean,
+): Expression {
   switch (phase) {
     case "submitting":
       return "nervous";
@@ -102,7 +112,7 @@ function restingPose(phase: Phase, step: number, rank: number | null): Expressio
     case "closedNoVote":
       return step === 0 ? "sad" : "idle";
     case "reveal":
-      if (rank === null) return "idle";
+      if (rank === null) return revealHeld ? "nervous" : "idle";
       if (step === 0) return "nervous";
       if (rank === 1) return "celebrating";
       if (rank === 2) return "smug";
@@ -123,12 +133,23 @@ export interface PhoneMascotProps {
   phase: Phase;
   /** Team of a fresh vote in this session (fills {team}); null = unknown. */
   teamName: string | null;
-  /** Personal rank at reveal; null = neutral. */
+  /**
+   * Personal rank at reveal; null = neutral. The shell passes it only after
+   * the projector-first hold, so no winner line can precede the podium.
+   */
   rank: number | null;
+  /** Reveal phase while the projector is still revealing: nervous, silent. */
+  revealHeld?: boolean;
   reduced: boolean;
 }
 
-export function PhoneMascot({ phase, teamName, rank, reduced }: PhoneMascotProps) {
+export function PhoneMascot({
+  phase,
+  teamName,
+  rank,
+  revealHeld = false,
+  reduced,
+}: PhoneMascotProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const brainRef = useRef<Brain | null>(null);
   const [line, setLine] = useState<Spoken | null>(null);
@@ -342,7 +363,9 @@ export function PhoneMascot({ phase, teamName, rank, reduced }: PhoneMascotProps
     }
   };
 
-  const pose = visibleLine ? visibleLine.expression : restingPose(phase, step, rank);
+  const pose = visibleLine
+    ? visibleLine.expression
+    : restingPose(phase, step, rank, revealHeld);
   const lookAt =
     !visibleLine && looksUp(phase, step, rank) ? { x: 0.05, y: -0.95 } : null;
   const size = 96;

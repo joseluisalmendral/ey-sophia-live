@@ -1,4 +1,4 @@
-import type { PollStatus } from "@/lib/types";
+import type { PollStatus, TieRule } from "@/lib/types";
 
 /**
  * Pure voter phase derivation (no React, no network).
@@ -84,4 +84,43 @@ export function denseRanking(
     lastRank = rank;
     return { id: r.id, name: r.name, color: r.color, count: r.count, rank };
   });
+}
+
+/** Ranked list as the projector presents it, plus whether the list may show. */
+export interface ProjectorRanking {
+  ranking: RankingEntry[];
+  /**
+   * True when `first_to_count` broke a tie for the lead: the projector crowns
+   * ONE winner by its tiebreak (team_position), so a list with two equal
+   * counts at the top would look contradictory next to the podium. The phone
+   * then shows only the voter's own place (consistent with the podium) and
+   * hides the list.
+   */
+  splitLead: boolean;
+}
+
+/**
+ * Rank rows exactly as the projector podium does (winner.ts + Podium.tsx),
+ * over the same order (count desc, then position asc):
+ *  - `double_crown` with a tied lead: shared ranks (co-winners share #1 and
+ *    the next team keeps its tally rank, e.g. 1-1-3, like the podium's third
+ *    plinth, which shows `third.rank`).
+ *  - otherwise: ordinal places 1, 2, 3… (the podium's single crown and its
+ *    2nd/3rd plinths are ordinal even on a count tie).
+ * Pure; shared by the production container and the /lab phones.
+ */
+export function projectorRanking(
+  rows: readonly { id: string; name: string; color: string; count: number; position: number }[],
+  tieRule: TieRule,
+): ProjectorRanking {
+  const dense = denseRanking(rows);
+  const tiedLead =
+    dense.length > 1 && dense[0].count > 0 && dense[0].count === dense[1].count;
+  if (tieRule === "double_crown" && tiedLead) {
+    return { ranking: dense, splitLead: false };
+  }
+  return {
+    ranking: dense.map((r, i) => ({ ...r, rank: i + 1 })),
+    splitLead: tiedLead,
+  };
 }

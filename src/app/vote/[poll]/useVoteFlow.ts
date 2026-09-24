@@ -5,7 +5,8 @@ import { usePollStatus } from "@/lib/polling/usePollStatus";
 import { useLocalStatusFlip } from "@/lib/polling/useLocalStatusFlip";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { Poll, PollStatus, Team } from "@/lib/types";
-import { denseRanking, derivePhase, type Action, type Phase, type RankingEntry } from "./phase";
+import { derivePhase, projectorRanking, type Action, type Phase, type RankingEntry } from "./phase";
+import { useRevealHold } from "./revealHold";
 
 /**
  * useVoteFlow — the container/logic side of the voter experience.
@@ -63,8 +64,18 @@ export interface VoteFlow {
   setSelectedId: (id: string) => void;
   votedTeam: Team | null;
   myRank: number | null;
-  /** Final ranked list from the same one-shot results fetch (empty until then). */
+  /**
+   * Final ranked list from the same one-shot results fetch (null until then,
+   * and null when a first_to_count tie at the top would contradict the
+   * projector's single crown — see projectorRanking).
+   */
   ranking: RankingEntry[] | null;
+  /**
+   * True once the projector's reveal arc has had time to land its podium
+   * (measured from the moment THIS phone learned the poll closed). Until then
+   * the phone must not show the rank, the list or any winner line.
+   */
+  revealArmed: boolean;
   error: string | null;
   submit: () => void;
   submitting: boolean;
@@ -140,10 +151,13 @@ export function useVoteFlow(
   const [votedTeamId, setVotedTeamId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Final ranked results, fetched EXACTLY ONCE when the poll closes and the
+  // Final ranked results, fetched EXACTLY ONCE after the poll closes when the
   // voter has a known team (fresh 'ok' vote). Drives the personal "#N" reveal.
   const [rankedResults, setRankedResults] = useState<ResultsRow[]>([]);
   const resultsFetched = useRef(false);
+  // Bumped on every relaunch: a results response that lands after a relaunch
+  // belongs to the previous run and is dropped.
+  const runRef = useRef(0);
 
   // RELAUNCH RESET: when the POLLED status rolls back to a pre-open state
   // (closed/open -> draft/countdown), the admin relaunched the poll. Clear the
@@ -168,6 +182,7 @@ export function useVoteFlow(
     setError(null);
     setRankedResults([]);
     resultsFetched.current = false;
+    runRef.current += 1;
   }, [polledStatus]);
 
   // Displayed phase is derived from polled status + the voter's action.
@@ -241,57 +256,59 @@ export function useVoteFlow(
     }
   }, [selectedId, poll.id, reduced, teams]);
 
-  // Personal reveal: when the poll closes AND the voter cast a known vote, fetch
-  // the ranked results ONCE from the cached endpoint. Any failure degrades to
-  // the neutral "watch the big screen" reveal (rank stays null) — never an error.
+  // Projector-first hold: starts the moment this phone learned 'closed' with a
+  // fresh vote (== phase "reveal") and ends after the full projector arc.
+  const revealArmed = useRevealHold(status === "closed" && votedTeamId !== null);
+
+  // Personal reveal: fetch the ranked results ONCE from the cached endpoint,
+  // but only once the SERVER is known to be closed — never on the bare local
+  // closes_at flip, where a vote that entered cast_vote a hair before the
+  // deadline may still be committing and a CDN-cached pre-close response
+  // could pin a wrong rank for the whole room. "Known closed" is either:
+  //   - the polled status says 'closed', or
+  //   - the projector-first hold has elapsed AND closes_at has passed. cast_vote
+  //     rejects every vote after closes_at (compute-on-read), so by then the
+  //     counts are final even if the DB row still reads 'open' (the pg_cron
+  //     backstop flips it every 30 s; the after-vote poll runs every ~20 s).
+  // Any failure degrades to the neutral "watch the big screen" state (rank
+  // stays null) — never an error.
   useEffect(() => {
     if (status !== "closed" || !votedTeamId || resultsFetched.current) return;
+    const deadlinePassed =
+      closesAt !== null && Date.now() >= new Date(closesAt).getTime();
+    const serverClosed =
+      polledStatus === "closed" || (revealArmed && deadlinePassed);
+    if (!serverClosed) return;
     resultsFetched.current = true;
-    let active = true;
-    (async () => {
+    // The request is NOT tied to this effect's lifetime: the deps above keep
+    // changing around the close (polled status, hold, deadline) and a
+    // cancelled in-flight fetch would leave the one-shot spent with no rank.
+    // Only a relaunch (runRef) invalidates the response.
+    const run = runRef.current;
+    void (async () => {
       try {
         const res = await fetch(
           `/api/poll/${encodeURIComponent(poll.id)}/results`,
           { cache: "no-store" },
         );
-        if (!active || !res.ok) return;
+        if (run !== runRef.current || !res.ok) return;
         const data = (await res.json()) as { teams?: ResultsRow[] };
-        if (active && Array.isArray(data.teams)) {
+        if (run === runRef.current && Array.isArray(data.teams)) {
           setRankedResults(data.teams);
         }
       } catch {
         // Silent: reveal falls back to the neutral state.
       }
     })();
-    return () => {
-      active = false;
-    };
-  }, [status, votedTeamId, poll.id]);
+  }, [status, polledStatus, revealArmed, closesAt, votedTeamId, poll.id]);
 
-  // Personal rank from the one-shot results fetch (dense 1-based ranking, ties
-  // share a rank — matches the projector's ranking). Only a fresh vote reaches
-  // the reveal phase, so votedTeamId is always known when this matters.
-  const myRank = useMemo(() => {
-    if (!votedTeamId || rankedResults.length === 0) return null;
-    const sorted = [...rankedResults].sort(
-      (a, b) => b.count - a.count || a.team_position - b.team_position,
-    );
-    let lastCount = Number.POSITIVE_INFINITY;
-    let lastRank = 0;
-    for (let i = 0; i < sorted.length; i++) {
-      const row = sorted[i];
-      const rank = row.count === lastCount ? lastRank : i + 1;
-      lastCount = row.count;
-      lastRank = rank;
-      if (row.team_id === votedTeamId) return rank;
-    }
-    return null;
-  }, [rankedResults, votedTeamId]);
-
-  // Compact ranked list for the personal result (same rule as myRank).
-  const ranking = useMemo<RankingEntry[] | null>(() => {
+  // Final places from the one-shot results fetch, ranked exactly like the
+  // projector podium (tie rule included), so the phone never contradicts the
+  // big screen. Only a fresh vote reaches the reveal phase, so votedTeamId is
+  // always known when this matters.
+  const placed = useMemo(() => {
     if (rankedResults.length === 0) return null;
-    return denseRanking(
+    return projectorRanking(
       rankedResults.map((r) => ({
         id: r.team_id,
         name: r.name,
@@ -299,8 +316,18 @@ export function useVoteFlow(
         count: r.count,
         position: r.team_position,
       })),
+      poll.tieRule,
     );
-  }, [rankedResults]);
+  }, [rankedResults, poll.tieRule]);
+
+  const myRank = useMemo(() => {
+    if (!votedTeamId || !placed) return null;
+    return placed.ranking.find((r) => r.id === votedTeamId)?.rank ?? null;
+  }, [placed, votedTeamId]);
+
+  // Compact ranked list for the personal result; hidden when a first_to_count
+  // tiebreak decided the crown (two equal counts at the top would read wrong).
+  const ranking = placed && !placed.splitLead ? placed.ranking : null;
 
   // Total finalists is stable from the server props; fall back to the fetched
   // results length (keeps the "de N finalistas" copy correct).
@@ -315,6 +342,7 @@ export function useVoteFlow(
     votedTeam,
     myRank,
     ranking,
+    revealArmed,
     error,
     submit,
     submitting: action === "submitting",

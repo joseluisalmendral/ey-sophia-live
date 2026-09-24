@@ -1,45 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { durations, easings, springs } from "@/lib/motion/tokens";
 import type { Team } from "@/lib/types";
 import type { RankingEntry } from "../phase";
 import { COPY, Kicker, ViewWrap, WatchPill, rankColor } from "./shared";
 
-/** Let the projector lead: the phone reveals the rank 600 ms after the flip. */
-export const REVEAL_DELAY_MS = 600;
-
 /**
  * Personal result (spec §3.1.9, motion §D6). Only rendered for a fresh 'ok'
  * vote in this session. Kicker → "Tu equipo quedó" → giant #N (gold / silver /
  * bronze / white) slammed in over a team-colour flash → team name → compact
- * ranked list with the voter's team lit. While the one-shot results fetch is
- * in flight (or if it fails) the neutral "watch the big screen" state shows.
+ * ranked list with the voter's team lit.
+ *
+ * The projector reveals first: until `armed` (the projector arc has had time
+ * to land its podium, see ../revealHold) — and while the one-shot results
+ * fetch is in flight or if it fails — only the suspense "watch the big
+ * screen" state shows. No rank, no list, no winner copy before that.
  */
 export function RevealView({
   team,
   rank,
   total,
   ranking,
+  armed,
   reduced,
 }: {
   team: Team | null;
   rank: number | null;
   total: number;
   ranking: readonly RankingEntry[] | null;
+  /** Projector-first gate: false while the projector's reveal arc runs. */
+  armed: boolean;
   reduced: boolean;
 }) {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    const id = setTimeout(() => setArmed(true), REVEAL_DELAY_MS);
-    return () => clearTimeout(id);
-  }, []);
   const show = armed && !!team && rank !== null;
 
   return (
     <ViewWrap reduced={reduced}>
-      <div className="flex flex-1 flex-col items-center gap-5 pt-2 text-center">
+      <div
+        className="flex flex-1 flex-col items-center gap-5 pt-2 text-center"
+        aria-live="polite"
+      >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -67,12 +68,12 @@ export function RevealView({
               transition={{ duration: durations.fast }}
               className="flex flex-1 flex-col items-center justify-center gap-5 pb-10"
             >
-              <p className="max-w-[16rem] text-balance font-display text-m-title font-extrabold leading-[1.1] text-text">
-                {COPY.revealRank}…
-              </p>
               <WatchPill reduced={reduced} />
-              <p className="text-m-label uppercase tracking-[0.2em] text-text-dim">
-                {COPY.revealOf(total)}
+              <p className="max-w-[17rem] text-balance font-display text-m-title font-extrabold leading-[1.1] text-text">
+                {COPY.revealHoldTitle}
+              </p>
+              <p className="max-w-[17rem] text-balance text-m-body text-text-dim">
+                {COPY.revealHoldSub}
               </p>
             </motion.div>
           )}
