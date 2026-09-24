@@ -8,7 +8,7 @@ import { CountdownTimer } from "@/components/atoms/CountdownTimer";
 import { durations, easings, springs } from "@/lib/motion/tokens";
 import { pickTextOn } from "@/lib/utils/contrast";
 import type { Poll, Team } from "@/lib/types";
-import type { Phase } from "../useVoteFlow";
+import type { Phase } from "../phase";
 import { COPY, CheckIcon, ViewWrap } from "./shared";
 
 /** Pure presentational voting/lobby view. Props in, no business hooks. */
