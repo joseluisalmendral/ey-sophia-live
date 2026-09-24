@@ -18,6 +18,11 @@ export const HOLD_MS = 650;
 const DRAIN_MS = 200;
 const HINT_MS = 2200;
 const HAPTIC_DONE = [18, 40, 18];
+/**
+ * Finger drift tolerated during a hold (px from the press point). Smaller
+ * moves are ignored; a bigger drag reads as "changed my mind" and cancels.
+ */
+const DRIFT_TOLERANCE_PX = 24;
 
 /**
  * HoldConfirmButton — the irreversible vote as a 0.65 s ritual.
@@ -27,9 +32,14 @@ const HAPTIC_DONE = [18, 40, 18];
  *   submit handler, untouched).
  * - Early release: the fill drains in 200 ms, a hint appears ("Mantén pulsado
  *   un momento") and the pill wiggles once. Never submits.
+ * - Drift: `touch-action: none` (the CTA never pans) and moves under 24 px
+ *   are ignored, so a trembling thumb never drops the hold.
  * - Keyboard / assistive tech: a synthetic click (Enter, Space, screen-reader
  *   activation — `event.detail === 0`) confirms immediately; those presses are
- *   deliberate. `aria-description` explains the hold.
+ *   deliberate. `aria-description` explains the hold. A visually hidden
+ *   "Confirmar voto a {team}" button right after the CTA calls the same
+ *   `onConfirm` directly for screen readers whose activation does not reach
+ *   the hold button as a detail-0 click (it becomes visible on keyboard focus).
  * - Reduced motion: the fill shows as 3 opacity steps, no wiggle.
  *
  * The fill + ink label are transform/clip-path only (no layout, no filters).
@@ -48,6 +58,7 @@ export function HoldConfirmButton({
   const progress = useMotionValue(0);
   const anim = useRef<AnimationPlaybackControls | null>(null);
   const holding = useRef(false);
+  const pressAt = useRef<{ x: number; y: number } | null>(null);
   const fired = useRef(false);
   const [hint, setHint] = useState(false);
   const wiggleRef = useRef<HTMLDivElement>(null);
@@ -113,6 +124,7 @@ export function HoldConfirmButton({
   };
 
   const cancel = () => {
+    pressAt.current = null;
     if (!holding.current || fired.current) return;
     holding.current = false;
     anim.current?.stop();
@@ -192,7 +204,14 @@ export function HoldConfirmButton({
           onPointerDown={(e) => {
             if (e.button !== 0) return;
             e.currentTarget.setPointerCapture?.(e.pointerId);
+            pressAt.current = { x: e.clientX, y: e.clientY };
             start();
+          }}
+          onPointerMove={(e) => {
+            const p = pressAt.current;
+            if (!p || !holding.current) return;
+            // Ignore small drift; only a real drag away cancels the hold.
+            if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > DRIFT_TOLERANCE_PX) cancel();
           }}
           onPointerUp={() => cancel()}
           onPointerCancel={() => cancel()}
@@ -230,6 +249,22 @@ export function HoldConfirmButton({
           )}
         </button>
       </div>
+
+      {/* Screen-reader confirm: same handler, no hold. Hidden visually but
+          reachable (and shown) on keyboard focus; disabled until a team is
+          picked so it never submits an empty choice. */}
+      <button
+        type="button"
+        className="sr-only focus-visible:not-sr-only focus-visible:mt-2 focus-visible:block focus-visible:w-full focus-visible:rounded-pill focus-visible:bg-cosmic-deep/90 focus-visible:px-4 focus-visible:py-2.5 focus-visible:text-center focus-visible:text-small focus-visible:font-semibold focus-visible:text-text"
+        disabled={!ready}
+        onClick={() => {
+          if (!ready || fired.current) return;
+          progress.set(1);
+          complete();
+        }}
+      >
+        {team ? `Confirmar voto a ${team.name}` : "Confirmar voto (elige antes un equipo)"}
+      </button>
     </div>
   );
 }
