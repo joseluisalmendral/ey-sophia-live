@@ -32,10 +32,10 @@ xp/00-director-notes.md · xp/01-app-map.md · xp/05-ux-spec.md (UX/UI + mascot 
 - [x] E3 Assistant brain (detectEvents/scheduler/resolver/lines) + MascotHost + SpeechBubble + anchors/keep-outs (WP3) (route: delegated writer, fable)
 - [x] E4 Assistant config: migration + admin form + Live Control toggle + projector endpoint (WP4) (route: delegated writer)
 - [x] E5 Phone v2: hold-to-confirm, glass cards, confirm moment, lobby retention, post-vote, personal result, phone mascot (WP5) (route: delegated writer)
-- [ ] E6 Projector broadcast grammar + lobby cleanup + count-in takeover + reveal/podium polish + mascot cameo (WP6/7/9/11) (route: delegated writer, fable)
+- [x] E6 Projector broadcast grammar + lobby cleanup + count-in takeover + reveal/podium polish + mascot cameo (WP6/7/9/11) (route: delegated writer, fable)
 - [x] E7 Home polish + OG share image (Codex render, optimized) (WP10) (route: delegated writer, done with E5)
-- [ ] E8 QA: visual QA (phone/projector/reduced motion), contract review, E2E on throwaway poll vs prod DB, perf check; fixes (route: delegated QA + reviewers)
-- [ ] E9 Push branch, preview check of /lab, final report (route: inline)
+- [x] E8 QA: visual QA (phone/projector/reduced motion), contract review, E2E on throwaway poll vs prod DB, perf check; fixes (route: delegated QA + reviewers)
+- [x] E9 Push branch, preview check of /lab, final report (route: inline)
 
 ## Acceptance criteria
 - /lab plays full show (lobby → count-in → live → close → reveal) with projector + phones, zero Supabase requests, works on Vercel preview.
@@ -67,4 +67,5 @@ xp/00-director-notes.md · xp/01-app-map.md · xp/05-ux-spec.md (UX/UI + mascot 
   Notes: with a manual close the phone reveals ~16 s after IT learns the close (after-vote poll ~20 s), so up to ~12 s after the podium; never before. Phone/projector clock skew stays a residual risk for timed closes (both flip locally at closes_at).
 
 ## Next step
-E8 QA (visual QA phone/projector/reduced motion, contract review, E2E on throwaway poll, perf) -> E9 push + preview.
+Owner review in the morning via preview /lab (https://ey-sophia-live-git-feat-expe-832284-joseluisalmendrals-projects.vercel.app/lab). Merge decision is the owner's; if merged before tonight, press 'Relanzar' on HACK27 first (it holds 1 test vote). Revert point: tag v1.0-event-fy27.
+- E9: parent spot check on HEAD: pnpm lint clean, tsc --noEmit exit 0, pnpm build OK (lab routes built). Branch pushed; preview deploy success; preview /lab, /lab/screen, /lab/phone, /lab/mascot = 200 and render (screenshot preview-lab.png, self-checks all green); prod /lab = 404 (main untouched). Diff main...HEAD: 95 files, +13932/-1318.
