@@ -1,11 +1,12 @@
 "use client";
 
-import { MascotHost } from "@/components/mascot/MascotHost";
+import { MascotHost, type MascotConfig } from "@/components/mascot/MascotHost";
 import { useLiveTally } from "@/lib/realtime/useLiveTally";
 import { useLocalStatusFlip } from "@/lib/polling/useLocalStatusFlip";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { Poll, PollStatus, Team } from "@/lib/types";
 import { ScreenStage } from "./ScreenStage";
+import { useAssistantConfig } from "./useAssistantConfig";
 import { useLobbyJoins } from "./useLobbyJoins";
 
 /**
@@ -32,27 +33,24 @@ export interface ScreenClientProps {
   voterUrl: string;
 }
 
-/**
- * Assistant config fields land with E4 (migration + admin form). Until then
- * the Poll row may not carry them: read structurally and fall back to the
- * defaults {enabled, 14 s, 28 s}. The host also sanitizes the interval.
- */
-function assistantConfig(poll: Poll) {
-  const p = poll as Poll & {
-    assistantEnabled?: boolean | null;
-    assistantMinSeconds?: number | null;
-    assistantMaxSeconds?: number | null;
-  };
+/** SSR baseline for the mascot config, from the poll row already loaded
+ * server-side (load.ts already applies its own {enabled,14,28} fallback when
+ * the DB predates the E4 migration). useAssistantConfig then keeps this live. */
+function ssrAssistantConfig(poll: Poll): MascotConfig {
   return {
-    enabled: p.assistantEnabled ?? true,
-    min: p.assistantMinSeconds ?? 14,
-    max: p.assistantMaxSeconds ?? 28,
+    enabled: poll.assistantEnabled,
+    min: poll.assistantMinSeconds,
+    max: poll.assistantMaxSeconds,
   };
 }
 
 export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
   const reduced = useReducedMotionPref();
-  const assistant = assistantConfig(poll);
+  // Live Control's Broqui switch (and the config form's min/max) must reach
+  // the projector without a reload and without a new realtime subscription —
+  // useAssistantConfig polls the tiny CDN-cached /api/poll/[id]/assistant
+  // endpoint (~5s, jittered, paused when hidden) mounted ONLY here.
+  const assistant = useAssistantConfig(poll.id, ssrAssistantConfig(poll));
   // Effective status derived from the SSR snapshot ALONE (local flip included):
   // before the first status broadcast the hook has no status, so this is the
   // only signal that the poll is already open — it keeps the open-poll resync
