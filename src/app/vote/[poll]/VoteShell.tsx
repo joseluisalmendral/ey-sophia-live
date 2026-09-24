@@ -11,7 +11,7 @@ import type { Phase, RankingEntry } from "./phase";
 import { PhoneHeader } from "./views/shared";
 import { LobbyView } from "./views/LobbyView";
 import { VotingView } from "./views/VotingView";
-import { HoldConfirmButton } from "./views/HoldConfirmButton";
+import { VoteButton } from "./views/VoteButton";
 import { ConfirmView } from "./views/ConfirmView";
 import { AlreadyVotedView } from "./views/AlreadyVotedView";
 import { ClosedView } from "./views/ClosedView";
@@ -23,13 +23,13 @@ import "./vote.css";
  *
  * A switch over the derived `phase` that renders the shader stage, the compact
  * brand header, the phone co-host row (Broqui, when the poll has the assistant
- * enabled), the matching view and — while voting — the sticky hold-to-confirm
- * CTA. Fed by VoteClient in production (useVoteFlow) and by the /lab phone
+ * enabled), the matching view and — while voting — the sticky "Votar a
+ * {team}" CTA (tap a card to pick, tap the button to vote). Fed by VoteClient in production (useVoteFlow) and by the /lab phone
  * personas (fake submit).
  *
- * Accessibility: real buttons (radio semantics on the cards), focus-visible
- * (global ring), contrast via pickTextOn, Enter/Space confirm instantly, full
- * reduced-motion path (crossfades, no burst/wiggle, stepped hold fill).
+ * Accessibility: real buttons (radio semantics on the cards, a plain button
+ * for the vote), focus-visible (global ring), contrast via pickTextOn, full
+ * reduced-motion path (cross-fades, no scale, no burst).
  */
 
 export interface VoteShellProps {
@@ -190,10 +190,10 @@ export function VoteShell({
                   id="vote-reward"
                   className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
                 />
-                <HoldConfirmButton
+                <VoteButton
                   team={selectedTeam}
                   submitting={submitting}
-                  onConfirm={onSubmit}
+                  onSubmit={onSubmit}
                   reduced={reduced}
                 />
               </div>

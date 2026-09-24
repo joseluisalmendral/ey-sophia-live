@@ -6,11 +6,11 @@ import { durations, easings } from "@/lib/motion/tokens";
 import type { Poll, Team } from "@/lib/types";
 import {
   COPY,
-  HoldIcon,
   Kicker,
   ScreenIcon,
   TapIcon,
   ViewWrap,
+  VoteIcon,
 } from "./shared";
 
 /**
@@ -19,7 +19,7 @@ import {
  * Unmistakably "not yet": no selectable cards. It keeps the wait alive with a
  * countdown hero (when a count-in is configured), the finalists list (phones
  * always see real identities; read-only rows, no numbering) and the 3-step
- * "Cómo va" so the hold-to-confirm is not a surprise. The mascot host row
+ * "Cómo va" (Elige · Vota · Mira la pantalla). The mascot host row
  * above (PhoneMascot) carries the ambient lines and the poke.
  */
 export function LobbyView({
@@ -86,7 +86,7 @@ export function LobbyView({
           </h2>
           <ol className="vpanel grid grid-cols-3 gap-1 px-2 py-3.5">
             <Step n={1} label={COPY.howPick} icon={<TapIcon size={22} />} />
-            <Step n={2} label={COPY.howHold} icon={<HoldIcon size={22} />} accent />
+            <Step n={2} label={COPY.howVote} icon={<VoteIcon size={22} />} accent />
             <Step n={3} label={COPY.howWatch} icon={<ScreenIcon size={22} />} />
           </ol>
         </motion.section>

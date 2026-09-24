@@ -9,7 +9,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
  * product. Any render/lifecycle error inside the wrapped mascot tree is caught
  * here: the mascot renders nothing for the rest of the session and the error
  * is logged ONCE (per boundary), so a Broqui bug can never unmount the
- * projector chart or the voter's hold-to-confirm button.
+ * projector chart or the voter's vote button.
  *
  * Error boundaries must be class components (React has no hook equivalent).
  * Errors thrown from timers/intervals are not render errors and never reach

@@ -23,15 +23,13 @@ export const COPY = {
   finalists: "Los finalistas",
   howTitle: "Cómo va",
   howPick: "Elige",
-  howHold: "Mantén pulsado",
+  howVote: "Vota",
   howWatch: "Mira la pantalla",
   // Voting
   voteTitle: "¿Quién se lleva tu voto?",
   pick: "Un solo voto. Sin vuelta atrás.",
   ctaPick: "Elige un equipo",
-  ctaHold: "Mantén para votar a",
-  ctaHint: "Mantén pulsado un momento",
-  ctaA11y: "Mantén pulsado para confirmar",
+  ctaVote: "Votar a",
   sending: "Enviando…",
   // Confirm / wait
   confirmHero: "¡Voto dentro!",
@@ -238,13 +236,12 @@ export function TapIcon({ size = 24, strokeWidth = 2 }: IconProps) {
   );
 }
 
-/** Hold: a ring filling around a dot (step 2 "Mantén pulsado"). */
-export function HoldIcon({ size = 24, strokeWidth = 2 }: IconProps) {
+/** Vote: a ballot tick in a rounded box (step 2 "Vota"). */
+export function VoteIcon({ size = 24, strokeWidth = 2 }: IconProps) {
   return (
     <Svg size={size} strokeWidth={strokeWidth}>
-      <circle cx="12" cy="12" r="8.5" strokeOpacity={0.35} />
-      <path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5" />
-      <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
+      <path d="M8 12.5 11 15.5 16.5 9" />
     </Svg>
   );
 }

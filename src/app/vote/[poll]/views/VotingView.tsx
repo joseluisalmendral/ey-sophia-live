@@ -13,9 +13,10 @@ const SELECT_SPRING = { type: "spring", stiffness: 420, damping: 22, mass: 0.8 }
 
 /**
  * VotingView — the open poll: full-width glass cards with a team-colour spine.
- * Selection is unmistakable (scale spring + 2 px team border + team light +
- * check badge) and the rest dim to 55 % + desaturate. Pure presentational;
- * the hold-to-confirm CTA lives in the shell's sticky footer.
+ * Tap a card to pick it. Selection is unmistakable (subtle scale spring +
+ * team border + a fading team tint + check badge); the others dim to 62 %
+ * but stay readable. Pure presentational; the "Votar a {team}" button lives
+ * in the shell's sticky footer.
  */
 export function VotingView({
   teams,
