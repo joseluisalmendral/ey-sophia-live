@@ -370,6 +370,8 @@ export function MascotHost(props: MascotHostProps) {
       bubbleTimer: 0 as ReturnType<typeof setTimeout> | 0,
       talkTimer: 0 as ReturnType<typeof setTimeout> | 0,
       disposed: false,
+      /* last poll status seen, to detect a relaunch (open/closed -> pre-open) */
+      lastStatus: latest.current.status as PollStatus,
     };
 
     const now = () => Date.now();
@@ -992,6 +994,18 @@ export function MascotHost(props: MascotHostProps) {
       if (S.disposed) return;
       const t = now();
       const L = latest.current;
+
+      // Relaunch (admin "Relanzar": closed/open -> draft/countdown with no
+      // reload): a new run starts, so the once-per-run events (count-in, first
+      // vote, close, winner…) must be able to fire again. Tracked even while
+      // Broqui is off, so switching him on mid-run starts from a clean slate.
+      const preOpen = L.status === "draft" || L.status === "countdown";
+      if (preOpen && (S.lastStatus === "open" || S.lastStatus === "closed")) {
+        detector = createDetectorState();
+        scheduler.newRun();
+      }
+      S.lastStatus = L.status;
+
       if (!measure()) return;
 
       // Enabled / panic toggle.

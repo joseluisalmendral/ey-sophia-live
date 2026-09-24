@@ -162,6 +162,10 @@ export function ScreenStage({
   const [liveFresh, setLiveFresh] = useState(false);
   if (status !== prevStatus) {
     setPrevStatus(status);
+    // Leaving the reveal (relaunch: closed -> draft) drops the last run's
+    // beat, so the next close starts from "no beat" instead of flashing the
+    // old "podium" into the mascot stage for a frame.
+    if (prevStatus === "closed") setRevealBeat(null);
     const fromLobby = prevStatus === "draft" || prevStatus === "countdown";
     if (status === "open" && fromLobby) {
       setStingerSeq(stingerSeq + 1);

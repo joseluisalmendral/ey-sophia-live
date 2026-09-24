@@ -195,6 +195,18 @@ export class Scheduler {
     }
   }
 
+  /**
+   * A new run of the same poll started (relaunch without reload): forget the
+   * once-per-run flags, cooldowns and queued events so the new run's count-in,
+   * first vote, close and winner lines can fire again. The open bubble and the
+   * ambient clock are left alone (the stage change re-plans the ambient).
+   */
+  newRun(): void {
+    this.queue = [];
+    this.lastFiredAt.clear();
+    this.firedOnce.clear();
+  }
+
   /** Force the next ambient line as soon as the gap allows (lab "random line"). */
   requestAmbient(now: number): void {
     this.nextAmbientAt = now;
