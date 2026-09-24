@@ -170,7 +170,7 @@ export function runSelfCheck(pool: readonly Line[] = LINES): SelfCheckReport {
     let draws = 0;
     for (const c of PROJECTOR_CATEGORIES) {
       for (let i = 0; i < 40; i++) {
-        const r = pickLine(c, anonCtx, rng);
+        const r = pickLine(c, anonCtx, rng, { pool });
         if (!r) continue;
         draws++;
         const leak = containsFixture(r.text);

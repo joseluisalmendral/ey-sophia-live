@@ -35,7 +35,7 @@ import {
   type AssistantEventType,
   type DetectorState,
 } from "@/lib/assistant/detectEvents";
-import type { LineCategory } from "@/lib/assistant/lines.es";
+import { PROJECTOR_LINES, type LineCategory } from "@/lib/assistant/lines.es";
 import {
   contextFromTeams,
   LineMemory,
@@ -191,6 +191,16 @@ const STAGE_EVENTS: Record<MascotStage, readonly AssistantEventType[]> = {
 
 const BASE_SIZE_1080 = 200;
 const STEP_MS = 120;
+/**
+ * DOM geometry (frame rect, anchors, keep-outs) is re-read on change, not on
+ * every 120 ms step: on a stage change, on a frame resize, every step for a
+ * short settle window after a stage change (stage crossfades and the count-in
+ * takeover shift the layout), and otherwise on a slow safety tick.
+ */
+const MEASURE_SAFETY_MS = 1000;
+const MEASURE_SETTLE_MS = 2000;
+/** The /lab overlap report keeps its own fresher cadence (QA gate). */
+const MEASURE_LAB_MS = 250;
 const ROAM_IDLE_MS: [number, number] = [25_000, 40_000];
 const PODIUM_SETTLE_MS = 1200;
 /** Length of Broqui's "dance" beat (jump + spin + 4 hops + settle). */
@@ -370,6 +380,10 @@ export function MascotHost(props: MascotHostProps) {
       bubbleTimer: 0 as ReturnType<typeof setTimeout> | 0,
       talkTimer: 0 as ReturnType<typeof setTimeout> | 0,
       disposed: false,
+      /* measure bookkeeping (see MEASURE_* above) */
+      measuredAt: 0,
+      measureDirty: true,
+      frameOk: false,
       /* last poll status seen, to detect a relaunch (open/closed -> pre-open) */
       lastStatus: latest.current.status as PollStatus,
     };
@@ -393,8 +407,11 @@ export function MascotHost(props: MascotHostProps) {
 
     /* ------------------------------------------------------------ measure */
     const measure = () => {
+      S.measuredAt = now();
+      S.measureDirty = false;
       const fr = frameEl.getBoundingClientRect();
-      if (fr.width <= 0 || fr.height <= 0) return false;
+      S.frameOk = fr.width > 0 && fr.height > 0;
+      if (!S.frameOk) return false;
       S.origin = { x: fr.left, y: fr.top };
       S.frame = rect(0, 0, fr.width, fr.height);
       const kk = fr.height / 1080;
@@ -674,6 +691,7 @@ export function MascotHost(props: MascotHostProps) {
       const category = categoryFor(decision);
       if (!category) return;
       const line = pickLine(category, lineContext(), rng, {
+        pool: PROJECTOR_LINES,
         memory,
         preferNames: S.stage === "podium" || S.stage === "reveal-suspense",
       });
@@ -1006,9 +1024,8 @@ export function MascotHost(props: MascotHostProps) {
       }
       S.lastStatus = L.status;
 
-      if (!measure()) return;
-
-      // Enabled / panic toggle.
+      // Enabled / panic toggle (before any DOM work: an off mascot costs
+      // nothing but this check).
       if (L.on !== S.on) {
         S.on = L.on;
         cancelAll();
@@ -1019,6 +1036,20 @@ export function MascotHost(props: MascotHostProps) {
         }
       }
       if (!S.on) return;
+
+      // Geometry on change only (see MEASURE_*); a hidden tab keeps the cached
+      // layout and re-measures as soon as it is visible again.
+      if (typeof document !== "undefined" && document.hidden) {
+        S.measureDirty = true;
+      } else {
+        const every = L.lab?.report
+          ? MEASURE_LAB_MS
+          : t - S.stageEnteredAt < MEASURE_SETTLE_MS
+            ? 0
+            : MEASURE_SAFETY_MS;
+        if (S.measureDirty || L.stage !== S.stage || t - S.measuredAt >= every) measure();
+      }
+      if (!S.frameOk) return;
 
       // Stage transitions.
       if (L.stage !== S.stage) {
@@ -1192,12 +1223,21 @@ export function MascotHost(props: MascotHostProps) {
       void onStageChange(stage, "reveal-hidden");
     }, 600);
     const interval = setInterval(step, STEP_MS);
+    // Frame resize (window, fullscreen, 4K switch): re-measure on the next step.
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            S.measureDirty = true;
+          })
+        : null;
+    resizeObserver?.observe(frameEl);
 
     return () => {
       S.disposed = true;
       S.gen += 1;
       clearTimeout(boot);
       clearInterval(interval);
+      resizeObserver?.disconnect();
       clearBubbleTimers();
       unsubscribe?.();
     };

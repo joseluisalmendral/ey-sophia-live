@@ -11,7 +11,7 @@
  * weighted seeded pick, so the whole thing stays deterministic under /lab.
  */
 
-import { LINES, type Line, type LineCategory } from "./lines.es";
+import type { Line, LineCategory } from "./lines.es";
 import { weightedPick, type Rng } from "./rng";
 
 export const MAX_LINE_CHARS = 90;
@@ -95,7 +95,12 @@ export class LineMemory {
 }
 
 export interface PickOptions {
-  pool?: readonly Line[];
+  /**
+   * Line pool to draw from (required): PROJECTOR_LINES on the projector,
+   * PHONE_LINES on the phone. No default, so this module never pulls the whole
+   * pool into a bundle that only needs one side.
+   */
+  pool: readonly Line[];
   memory?: LineMemory;
   /** Prefer lines with names when they are allowed (post-reveal drama). */
   preferNames?: boolean;
@@ -110,9 +115,9 @@ export function pickLine(
   category: LineCategory,
   ctx: LineContext,
   rng: Rng,
-  opts: PickOptions = {},
+  opts: PickOptions,
 ): ResolvedLine | null {
-  const pool = opts.pool ?? LINES;
+  const pool = opts.pool;
   const candidates: { line: Line; resolved: ResolvedLine }[] = [];
   for (const line of pool) {
     if (line.category !== category) continue;

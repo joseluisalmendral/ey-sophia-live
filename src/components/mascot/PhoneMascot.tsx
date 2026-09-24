@@ -34,6 +34,7 @@ import { Broqui, type BroquiAction, type Expression } from "./Broqui";
 import { PhoneSpeechBubble, dwellMs, typingMs, BUBBLE_EXIT_MS } from "./SpeechBubble";
 import type { LineCategory } from "@/lib/assistant/lines.es";
 import { LineMemory, pickLine, type LineContext } from "@/lib/assistant/resolveLine";
+import { PHONE_LINES } from "@/lib/assistant/lines.phone.es";
 import { mulberry32, uniform, type Rng } from "@/lib/assistant/rng";
 import type { Phase } from "@/app/vote/[poll]/phase";
 import "./phone-mascot.css";
@@ -209,7 +210,11 @@ export function PhoneMascot({
         scheduleAmbientRef.current();
         return false;
       }
-      const picked = pickLine(category, b.ctx, b.rng, { memory: b.memory, preferNames: true });
+      const picked = pickLine(category, b.ctx, b.rng, {
+        pool: PHONE_LINES,
+        memory: b.memory,
+        preferNames: true,
+      });
       if (!picked) {
         scheduleAmbientRef.current();
         return false;
