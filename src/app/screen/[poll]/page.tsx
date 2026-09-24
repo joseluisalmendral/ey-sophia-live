@@ -29,8 +29,8 @@ export async function generateMetadata({
     .eq(column, value)
     .maybeSingle<{ title: string }>();
   const title = data?.title
-    ? `${data.title} · Pantalla · EY SophIA Live`
-    : "Pantalla · EY SophIA Live";
+    ? `${data.title} · Pantalla · IA Hackathon`
+    : "Pantalla · IA Hackathon";
   return { title };
 }
 

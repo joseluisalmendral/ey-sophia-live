@@ -76,7 +76,7 @@ export async function generateMetadata({
     .select("title")
     .eq(column, value)
     .maybeSingle<{ title: string }>();
-  const title = data?.title ? `Votar · ${data.title}` : "Votar · EY SophIA Live";
+  const title = data?.title ? `Votar · ${data.title}` : "Votar · IA Hackathon";
   return { title };
 }
 

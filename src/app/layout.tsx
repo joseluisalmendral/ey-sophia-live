@@ -18,9 +18,9 @@ const overpass = Overpass({
 });
 
 export const metadata: Metadata = {
-  title: "EY SophIA Live",
+  title: "IA Hackathon · #EYBOOTCAMPFY27",
   description:
-    "Votación en vivo del público para EY SophIA, en colaboración con thePower.",
+    "Votación en vivo del IA Hackathon del EY Bootcamp FY27, en colaboración con thePower.",
 };
 
 export default function RootLayout({

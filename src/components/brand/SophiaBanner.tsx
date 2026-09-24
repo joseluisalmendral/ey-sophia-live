@@ -2,10 +2,12 @@ import Image from "next/image";
 import { EyBeam } from "./EyBeam";
 
 /**
- * SophiaBanner — the reusable EY SophIA co-brand banner.
+ * SophiaBanner — the reusable EY co-brand banner (component/prop names kept
+ * as SophIA internally to minimize diff; only the rendered wordmark changed).
  *
- * Cosmic gradient field with the EY beam, the "SophIA" wordmark, and thePower
- * co-brand logo. Two variants:
+ * Cosmic gradient field with the EY beam, the "IA HACKATHON" wordmark
+ * (+ #EYBOOTCAMPFY27 tag on the hero variant), and thePower co-brand logo.
+ * Two variants:
  * - `hero`: large, used at the top of the voter/projector surfaces.
  * - `confirmation`: compact, used on the post-vote confirmation screen.
  *
@@ -61,17 +63,30 @@ export function SophiaBanner({
       >
         <div className={["flex items-center", isHero ? "gap-3" : "gap-4"].join(" ")}>
           <EyBeam surface="dark" size={isHero ? 44 : 38} label="EY" />
-          <div className={["flex flex-col", isHero ? "items-start" : ""].join(" ")}>
+          <div
+            className={[
+              "flex min-w-0 flex-1 flex-col",
+              isHero ? "items-start" : "",
+            ].join(" ")}
+          >
             <span
-              className="font-display font-extrabold leading-none tracking-tight text-text"
-              style={{ fontSize: isHero ? "var(--text-h2)" : "var(--text-h3)" }}
+              className="font-display font-extrabold leading-tight tracking-tight text-text"
+              style={{
+                fontSize: isHero
+                  ? "clamp(1.05rem, 5.5vw, var(--text-h2))"
+                  : "clamp(0.95rem, 4.6vw, var(--text-h3))",
+              }}
             >
-              Soph
-              <span className="text-sophia-accent glow-sophia">IA</span>
+              <span className="text-sophia-accent glow-sophia">IA</span> HACKATHON
             </span>
             <span className="text-micro uppercase tracking-[0.22em] text-text-dim">
               EN VIVO
             </span>
+            {isHero && (
+              <span className="text-micro font-semibold tracking-[0.08em] text-text-dim">
+                #EYBOOTCAMPFY27
+              </span>
+            )}
           </div>
         </div>
 

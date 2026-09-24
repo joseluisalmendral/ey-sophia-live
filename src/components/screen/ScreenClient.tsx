@@ -140,9 +140,9 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
               >
                 <div className="flex items-center gap-3">
                   <EyBeam surface="dark" size={36} label="" />
-                  <span className="font-display text-[clamp(1.1rem,2vw,1.8rem)] font-black leading-none text-text">
-                    Soph<span className="text-sophia-accent glow-sophia">IA</span>
-                    <span className="ml-2 text-[clamp(0.7rem,1.1vw,1rem)] font-bold uppercase tracking-[0.25em] text-text-dim">
+                  <span className="font-display text-[clamp(0.95rem,1.9vw,1.8rem)] font-black leading-none tracking-tight text-text">
+                    <span className="text-sophia-accent glow-sophia">IA</span> HACKATHON
+                    <span className="ml-2 text-[clamp(0.6rem,1vw,1rem)] font-bold uppercase tracking-[0.2em] text-text-dim">
                       EN VIVO
                     </span>
                   </span>

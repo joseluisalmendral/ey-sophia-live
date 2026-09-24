@@ -54,7 +54,7 @@ export default function Home() {
         </div>
 
         <footer className="mt-10 text-center text-micro text-ey-gray1">
-          EY SophIA Live, en colaboración con thePower.
+          IA Hackathon · #EYBOOTCAMPFY27, en colaboración con thePower.
         </footer>
       </main>
     </ShaderBackground>

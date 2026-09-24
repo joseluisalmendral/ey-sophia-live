@@ -6,7 +6,7 @@ import { EyBeam } from "@/components/brand/EyBeam";
  * no poll is assigned (/tv/[slug] with poll_id NULL).
  *
  * Deliberately calm and self-explanatory for the room: cosmic ShaderBackground,
- * the SophIA wordmark treatment, and a discreet "channel ready" line so the
+ * the IA HACKATHON wordmark treatment, and a discreet "channel ready" line so the
  * technician knows the projector is correctly plugged in and simply waiting for
  * the admin to assign a poll from the panel.
  */
@@ -17,10 +17,12 @@ export function ChannelStandby({ slug }: { slug: string }) {
         <div className="flex flex-col items-center gap-8">
           <EyBeam surface="dark" size={72} label="" />
           <div className="flex flex-col items-center gap-3">
-            <h1 className="font-display text-[clamp(2.5rem,6vw,5rem)] font-black tracking-tight text-text">
-              Soph<span className="text-sophia-accent glow-sophia">IA</span>{" "}
-              <span className="text-ey-yellow">Live</span>
+            <h1 className="max-w-[85vw] text-balance text-center font-display text-[clamp(2rem,5.5vw,4.6rem)] font-black tracking-tight text-text">
+              <span className="text-sophia-accent glow-sophia">IA</span> HACKATHON
             </h1>
+            <span className="font-display text-[clamp(0.85rem,1.6vw,1.2rem)] font-bold uppercase tracking-[0.25em] text-ey-yellow">
+              #EYBOOTCAMPFY27
+            </span>
             <p className="text-[clamp(1rem,2vw,1.5rem)] font-semibold text-text-dim">
               Canal listo — esperando asignación
             </p>

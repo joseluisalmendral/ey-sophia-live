@@ -54,7 +54,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  return { title: `Canal ${slug.toLowerCase()} · Pantalla · EY SophIA Live` };
+  return { title: `Canal ${slug.toLowerCase()} · Pantalla · IA Hackathon` };
 }
 
 export default async function TvChannelPage({

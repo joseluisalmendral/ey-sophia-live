@@ -39,7 +39,7 @@ export default function AdminLoginPage() {
               Panel de administración
             </h1>
             <p className="mt-1 text-small text-text-dim">
-              SophIA Live · acceso solo para administradores
+              IA Hackathon · acceso solo para administradores
             </p>
           </div>
         </div>

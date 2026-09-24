@@ -8,8 +8,9 @@ import { durations, easings } from "@/lib/motion/tokens";
 /**
  * Curtain — the TELÓN beat: two 3D curtain panels (CSS perspective, pleated
  * fabric, gold seam trim, roaming sheen) slam shut over the stage. The left
- * panel carries the EY SophIA co-brand (EY beam + "SophIA" wordmark with the
- * "IA" in the sophia blue accent); the right panel carries thePower. A pulsing
+ * panel carries the EY co-brand (EY beam + "IA HACKATHON" wordmark with the
+ * "IA" in the sophia blue accent, plus the #EYBOOTCAMPFY27 tag); the right
+ * panel carries thePower. A pulsing
  * "Y el equipo ganador es…" rides the seam.
  *
  * The OPENING is the AnimatePresence exit: when the parent advances to the
@@ -48,13 +49,18 @@ export function Curtain({ reduced, openSeconds }: CurtainProps) {
       exit={{ opacity: reduced ? 0 : 1 }}
       transition={{ duration: durations.base }}
     >
-      {/* LEFT panel — EY SophIA */}
+      {/* LEFT panel — EY IA Hackathon */}
       <CurtainPanel side="left" reduced={reduced} close={closeTransition} open={openTransition}>
         <div className="flex flex-col items-center gap-6">
           <EyBeam surface="dark" size={116} label="EY" />
-          <span className="font-display text-[clamp(3.2rem,7.5vw,7rem)] font-extrabold leading-none tracking-tight text-text">
-            Soph<span className="text-sophia-accent glow-sophia">IA</span>
-          </span>
+          <div className="flex max-w-[42vw] flex-col items-center gap-2 text-center">
+            <span className="text-balance font-display text-[clamp(2.4rem,6.2vw,5.8rem)] font-extrabold leading-none tracking-tight text-text">
+              <span className="text-sophia-accent glow-sophia">IA</span> HACKATHON
+            </span>
+            <span className="text-[clamp(0.85rem,1.3vw,1.2rem)] uppercase tracking-[0.3em] text-text-dim">
+              #EYBOOTCAMPFY27
+            </span>
+          </div>
         </div>
       </CurtainPanel>
 

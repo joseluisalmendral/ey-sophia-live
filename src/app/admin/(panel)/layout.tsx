@@ -62,11 +62,11 @@ export default async function PanelLayout({
           <Link
             href="/admin"
             className="flex items-center gap-3"
-            aria-label="Panel de administración SophIA"
+            aria-label="Panel de administración IA Hackathon"
           >
             <EyBeam surface="dark" size={26} label="" />
             <span className="font-display text-h3 font-bold text-text">
-              SophIA <span className="text-text-dim">· Admin</span>
+              IA Hackathon <span className="text-text-dim">· Admin</span>
             </span>
           </Link>
           <div className="flex items-center gap-3">
