@@ -86,6 +86,132 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-decel: cubic-bezier(0, 0, 0, 1);
   --ease-accel: cubic-bezier(0.3, 0, 1, 1);
+
+  /* ===================== Experience v2 additions (additive) ===================== */
+
+  /* --- Glass ("Cosmic Broadcast Glass") --- */
+  --color-glass-fill: rgb(255 255 255 / 0.07);
+  --color-glass-fill-strong: rgb(255 255 255 / 0.11);
+  --color-glass-border: rgb(255 255 255 / 0.13);
+  --color-glass-solid: rgb(20 26 51 / 0.88); /* no-backdrop fallback */
+  --shadow-glass:
+    inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 -1px 0 rgb(0 0 0 / 0.25),
+    0 16px 48px -16px rgb(0 0 0 / 0.6);
+
+  /* --- Broadcast --- */
+  --color-live: #ff3b4a; /* the live dot only, never text blocks */
+
+  /* --- Mascot (Broqui): mint/teal harmonised with --color-power-green --- */
+  --color-broqui-line: #8ff5c8; /* eyes + inner line */
+  --color-broqui-eye: #a8f7d3; /* eye capsules (a hair lighter than the line) */
+  --color-broqui-rim: #d8ff6b; /* top-right rim light (yellow-green, EY kiss) */
+  --color-broqui-shell: #0f4a4f; /* glass body mid tone */
+  --color-broqui-shell-deep: #082e33; /* glass body bottom */
+  --color-broqui-edge: #4fd6b8; /* shell edge stroke */
+  --color-broqui-glow: rgb(127 240 196 / 0.35);
+
+  /* --- Speech bubble (tokens only; component lands in E3) --- */
+  --color-bubble: #f6f6fa;
+  --color-bubble-ink: #14141c;
+  --color-bubble-edge: #7ff0c4;
+
+  /* --- Projector type (fluid; 1080p values in comments) --- */
+  --text-proj-hero: clamp(4rem, 6.2vw, 7.5rem); /* ~119px */
+  --text-proj-h1: clamp(2.5rem, 3.4vw, 4.25rem); /* ~65px */
+  --text-proj-h2: clamp(1.9rem, 2.4vw, 3rem); /* ~46px */
+  --text-proj-bubble: clamp(1.6rem, 2vw, 2.4rem); /* ~38px */
+  --text-proj-label: clamp(1.1rem, 1.35vw, 1.6rem); /* ~26px, the floor */
+  --text-proj-number: clamp(3rem, 4.4vw, 5.5rem);
+
+  /* --- Phone type --- */
+  --text-m-hero: 2.5rem;
+  --text-m-title: 1.75rem;
+  --text-m-card: 1.25rem;
+  --text-m-body: 1.0625rem;
+  --text-m-bubble: 1rem;
+  --text-m-label: 0.75rem;
+
+  /* --- Spacing / sizing --- */
+  --spacing-proj-safe: clamp(1.25rem, 3vw, 3.5rem);
+  --size-mascot-proj: clamp(120px, 9vw, 180px);
+  --size-mascot-phone: 96px;
+
+  /* --- Motion (v2) --- */
+  --ease-spring-out: cubic-bezier(0.34, 1.56, 0.64, 1); /* CSS-only overshoot */
+  --ease-sweep: cubic-bezier(0.7, 0, 0.2, 1);
+  --ease-travel: cubic-bezier(0.3, 0, 0.15, 1);
+  --duration-stinger: 520ms;
+  --duration-bubble-in: 260ms;
+  --duration-bubble-out: 180ms;
+}
+
+/*
+ * Glass recipe (v2). `.glass` is the frosted panel; `.glass--flat` drops the
+ * backdrop blur for surfaces that animate transform/size (bars, rows, lists);
+ * `.glass--lit` adds a team light (set `--team` inline). The `::after` noise is
+ * a static, pre-rendered SVG turbulence tile (not an animated filter).
+ * Perf: max 4 backdrop-filter surfaces visible at once.
+ */
+:root {
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.glass {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(
+    180deg,
+    var(--color-glass-fill-strong),
+    var(--color-glass-fill)
+  );
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--color-glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: var(--noise);
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+}
+
+.glass--flat {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--color-glass-solid);
+}
+
+.glass--lit {
+  background:
+    radial-gradient(
+      120% 90% at 0% 0%,
+      color-mix(in oklab, var(--team, var(--color-power-green)) 24%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      var(--color-glass-fill-strong),
+      var(--color-glass-fill)
+    );
+  box-shadow:
+    var(--shadow-glass),
+    0 0 0 1px
+      color-mix(in oklab, var(--team, var(--color-power-green)) 55%, transparent),
+    0 0 36px -6px
+      color-mix(in oklab, var(--team, var(--color-power-green)) 45%, transparent);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass {
+    background: var(--color-glass-solid);
+  }
 }
 
 /*
