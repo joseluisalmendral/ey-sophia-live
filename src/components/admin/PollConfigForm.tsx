@@ -12,6 +12,7 @@ import {
 } from "@/app/admin/(panel)/poll-actions";
 import { validateInterval } from "@/lib/assistant/scheduler";
 import type { ChartType, TieRule } from "@/lib/types";
+import type { SharedAssistant } from "./sharedAssistant";
 
 /**
  * PollConfigForm — create/edit a poll and its teams.
@@ -75,7 +76,18 @@ const AUTO_ASSIGNABLE_COLORS = new Set(
   [...KEYWORD_COLORS, ...DEFAULT_COLORS].map((c) => c.toLowerCase()),
 );
 
-export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
+export function PollConfigForm({
+  initial,
+  assistant,
+}: {
+  initial: PollConfigInitial;
+  /**
+   * Edit mode inside PollWorkspace: the Broqui switch is the SHARED state
+   * (same value as Live Control; toggling applies at once). Absent on the
+   * create page, where it is plain form state written by createPoll.
+   */
+  assistant?: SharedAssistant;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const isEdit = Boolean(initial.id);
@@ -96,9 +108,11 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
     initial.anonymousDisplay,
   );
   const [tieRule, setTieRule] = useState<TieRule>(initial.tieRule);
-  const [assistantEnabled, setAssistantEnabled] = useState(
-    initial.assistantEnabled,
-  );
+  const [localAssistant, setLocalAssistant] = useState(initial.assistantEnabled);
+  // Single source of truth in edit mode; local draft on the create page.
+  const assistantEnabled = assistant ? assistant.enabled : localAssistant;
+  const toggleAssistant = (next: boolean) =>
+    assistant ? assistant.set(next) : setLocalAssistant(next);
   const [assistantMin, setAssistantMin] = useState<string>(
     String(initial.assistantMinSeconds),
   );
@@ -439,27 +453,35 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
         </span>
       </label>
 
-      {/* Broqui (mascot) settings. The on/off switch is only set here at
-          creation; afterwards Live Control is its single writer (saving this
-          form never touches it), so the edit form just points there. */}
+      {/* Broqui (mascot) settings. In edit mode the switch is the SAME state
+          as Live Control's (lifted to PollWorkspace): toggling applies at once
+          and a save writes the current value, so neither can clobber the
+          other. On the create page it is plain form state. */}
       <fieldset className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <legend className="px-1 font-display text-h3 font-bold text-text">
-          Asistente en pantalla (Broqui)
+          Asistente (Broqui)
         </legend>
-        {isEdit ? (
-          <p className="mt-2 text-small text-text-dim">
-            Encender o apagar a Broqui se controla en directo desde la pestaña «Control en vivo».
+        <label className="mt-2 flex items-start gap-2.5 text-small text-text">
+          <input
+            type="checkbox"
+            checked={assistantEnabled}
+            disabled={assistant?.pending}
+            onChange={(e) => toggleAssistant(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-[var(--color-ey-yellow)] disabled:opacity-60"
+          />
+          <span className="flex flex-col gap-0.5">
+            Mostrar a Broqui (proyector y móviles)
+            <span className="text-micro text-text-dim">
+              {assistant
+                ? "Se aplica al instante (igual que en «Control en vivo»). El proyector lo recoge en ~5 s; los móviles, al cargar la página."
+                : "Se puede cambiar después aquí o en directo desde «Control en vivo»."}
+            </span>
+          </span>
+        </label>
+        {assistant?.error && (
+          <p role="alert" className="mt-2 text-small text-[#FF9E9E]">
+            {assistant.error}
           </p>
-        ) : (
-          <label className="mt-2 flex items-center gap-2.5 text-small text-text">
-            <input
-              type="checkbox"
-              checked={assistantEnabled}
-              onChange={(e) => setAssistantEnabled(e.target.checked)}
-              className="h-4 w-4 accent-[var(--color-ey-yellow)]"
-            />
-            Mostrar a Broqui en el proyector
-          </label>
         )}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">

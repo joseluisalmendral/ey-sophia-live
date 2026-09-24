@@ -47,9 +47,9 @@ export interface PollFormInput {
   tieRule: TieRule;
   teams: TeamInput[];
   /**
-   * Initial Broqui on/off, written ONLY by createPoll. After creation the Live
-   * Control switch (setAssistantEnabled) is the single writer, so saving the
-   * config form mid-show can never overwrite the live toggle.
+   * Broqui on/off. The admin UI keeps ONE shared value for the config form
+   * and the Live Control switch (PollWorkspace), so the form always submits
+   * the CURRENT value and a save can never overwrite the live toggle.
    */
   assistantEnabled: boolean;
   assistantMinSeconds: number;
@@ -164,8 +164,11 @@ export async function updatePoll(input: PollFormInput): Promise<ActionResult> {
       show_names: input.showNames,
       anonymous_display: input.anonymousDisplay,
       tie_rule: input.tieRule,
-      // assistant_enabled is intentionally NOT written here: Live Control owns
-      // it after creation (see PollFormInput.assistantEnabled).
+      // The form submits the shared (current) Broqui value; only a real
+      // boolean from the wire is written.
+      ...(typeof input.assistantEnabled === "boolean"
+        ? { assistant_enabled: input.assistantEnabled }
+        : {}),
       assistant_min_interval_s: input.assistantMinSeconds,
       assistant_max_interval_s: input.assistantMaxSeconds,
     })

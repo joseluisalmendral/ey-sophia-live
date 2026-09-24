@@ -8,6 +8,7 @@ import { ProjectToChannelButton } from "./ProjectToChannelButton";
 import { LiveControlPanel } from "./LiveControlPanel";
 import { RunHistoryPanel } from "./RunHistoryPanel";
 import { StatusBadge } from "./StatusBadge";
+import { useSharedAssistant } from "./sharedAssistant";
 import type { PollRun } from "@/app/admin/(panel)/poll-data";
 import type { PollStatus } from "@/lib/types";
 
@@ -34,7 +35,11 @@ export function PollWorkspace({
   joinCode: string;
   hasCountdown: boolean;
   configInitial: PollConfigInitial;
-  /** Current DB value for the Live Control Broqui switch (server snapshot). */
+  /**
+   * Current DB value for Broqui (server snapshot). Lifted here as the single
+   * source of truth for BOTH the config form switch and the Live Control
+   * switch.
+   */
   assistantEnabled: boolean;
   /** Archived launches (poll_runs), newest first — the "Historial" tab. */
   runs: PollRun[];
@@ -43,6 +48,7 @@ export function PollWorkspace({
   channel?: { slug: string; pollId: string | null } | null;
 }) {
   const [tab, setTab] = useState<"config" | "live" | "history">(initialTab);
+  const assistant = useSharedAssistant(pollId, assistantEnabled);
 
   const tabCls = (active: boolean) =>
     [
@@ -118,7 +124,7 @@ export function PollWorkspace({
             assignedPollId={channel.pollId}
           />
         )}
-        <PollConfigForm initial={configInitial} />
+        <PollConfigForm initial={configInitial} assistant={assistant} />
       </div>
       <div className={tab === "live" ? undefined : "hidden"}>
         <LiveControlPanel
@@ -129,7 +135,7 @@ export function PollWorkspace({
           teamCount={
             configInitial.teams.filter((t) => t.name.trim().length > 0).length
           }
-          assistantEnabled={assistantEnabled}
+          assistant={assistant}
           enabled={tab === "live"}
         />
       </div>
