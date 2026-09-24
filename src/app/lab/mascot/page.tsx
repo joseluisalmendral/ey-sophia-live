@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { guardLab } from "../guard";
 import { MascotLab } from "./MascotLab";
 import { EXPRESSIONS, type Expression } from "@/components/mascot/expressions";
 
@@ -27,9 +27,7 @@ export default async function MascotLabPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (process.env.VERCEL_ENV === "production" && process.env.ENABLE_LAB !== "1") {
-    notFound();
-  }
+  guardLab();
   const sp = await searchParams;
   const one = (k: string) => (Array.isArray(sp[k]) ? sp[k]?.[0] : sp[k]) as string | undefined;
   const size = Number(one("size"));
