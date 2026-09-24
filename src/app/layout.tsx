@@ -17,10 +17,39 @@ const overpass = Overpass({
   weight: ["600", "700", "800", "900"],
 });
 
+const TITLE = "IA Hackathon · #EYBOOTCAMPFY27";
+const DESCRIPTION =
+  "Votación en vivo del IA Hackathon del EY Bootcamp FY27, en colaboración con thePower.";
+
+/**
+ * Absolute base for the share image URLs (opengraph-image.jpg /
+ * twitter-image.jpg next to this layout). Same env precedence as the
+ * projector QR; on Vercel without it, the production domain; otherwise Next
+ * falls back to the request host.
+ */
+function siteUrl(): URL | undefined {
+  const env = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (env) return new URL(env);
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  return vercel ? new URL(`https://${vercel}`) : undefined;
+}
+
 export const metadata: Metadata = {
-  title: "IA Hackathon · #EYBOOTCAMPFY27",
-  description:
-    "Votación en vivo del IA Hackathon del EY Bootcamp FY27, en colaboración con thePower.",
+  metadataBase: siteUrl(),
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    siteName: "IA Hackathon",
+    title: TITLE,
+    description: "Vota en directo y mira cómo se dispara el marcador en la pantalla grande.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: "Vota en directo y mira cómo se dispara el marcador en la pantalla grande.",
+  },
 };
 
 export default function RootLayout({

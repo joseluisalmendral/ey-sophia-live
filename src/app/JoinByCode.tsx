@@ -29,6 +29,8 @@ import { useRouter } from "next/navigation";
  */
 
 const MAX_CODE_LENGTH = 8;
+/** Plausible join code shape (codes are 5–6 chars today; allow 4–8). */
+const CODE_RE = /^[A-Z0-9]{4,8}$/;
 
 /** Normalise to the shape join codes take: uppercase, no inner/outer spaces. */
 function normaliseCode(raw: string): string {
@@ -51,12 +53,13 @@ export function JoinByCode() {
   const [error, setError] = useState<string | null>(null);
 
   const checking = phase === "checking";
-  const canSubmit = code.length > 0 && !checking;
+  const valid = CODE_RE.test(code);
+  const canSubmit = valid && !checking;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = normaliseCode(code);
-    if (!value || checking) return;
+    if (!CODE_RE.test(value) || checking) return;
 
     setPhase("checking");
     setError(null);
@@ -96,9 +99,9 @@ export function JoinByCode() {
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
       <label
         htmlFor={inputId}
-        className="font-display text-small font-semibold uppercase tracking-[0.16em] text-text-dim"
+        className="font-display text-m-label font-extrabold uppercase tracking-[0.22em] text-text-dim"
       >
-        Introduce el código
+        Código de la sala
       </label>
 
       <input
@@ -121,10 +124,10 @@ export function JoinByCode() {
           setCode(normaliseCode(e.target.value));
           if (error) setError(null);
         }}
-        placeholder="Ej. DEMO42"
+        placeholder="HACK27"
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
-        className="h-16 w-full rounded-xl border border-white/15 bg-white/5 px-5 text-center font-display text-h2 font-extrabold uppercase tracking-[0.24em] text-text placeholder:tracking-[0.12em] placeholder:text-text-dim/50 transition-colors duration-150 focus:border-ey-yellow/60 aria-[invalid=true]:border-red-400/70"
+        className="code-input h-[4.5rem] w-full rounded-2xl border border-white/15 bg-[rgb(8_12_30/0.55)] px-5 text-center font-display text-[1.75rem] font-extrabold uppercase tracking-[0.2em] text-text shadow-[inset_0_2px_10px_rgb(0_0_0/0.35)] transition-[border-color,box-shadow] duration-150 placeholder:text-text/40 focus:border-ey-yellow/70 focus:shadow-[inset_0_2px_10px_rgb(0_0_0/0.35),0_0_0_4px_rgb(255_230_0/0.12)] aria-[invalid=true]:border-red-400/70"
       />
 
       {/* aria-live so the error is announced when it appears; always in the DOM
@@ -146,7 +149,11 @@ export function JoinByCode() {
         type="submit"
         disabled={!canSubmit}
         aria-busy={checking}
-        className="mt-1 inline-flex h-16 w-full items-center justify-center gap-2 rounded-xl bg-ey-yellow font-display text-h3 font-extrabold text-ey-confident shadow-[var(--shadow-glow-win)] transition-[transform,opacity] duration-150 ease-out active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/12 disabled:text-text-dim disabled:shadow-none"
+        className={`mt-1 inline-flex h-16 w-full items-center justify-center gap-2 rounded-pill font-display text-[1.125rem] font-extrabold transition-[transform,background-color,color,box-shadow] duration-200 ease-out ${
+          valid || checking
+            ? "bg-ey-yellow text-ey-confident shadow-[var(--shadow-glow-win)] active:scale-[0.98]"
+            : "cursor-not-allowed bg-transparent text-text-dim shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.22)]"
+        }`}
       >
         {checking ? (
           <>
@@ -157,7 +164,7 @@ export function JoinByCode() {
             Comprobando…
           </>
         ) : (
-          "Entrar"
+          "Entrar en la sala"
         )}
       </button>
     </form>

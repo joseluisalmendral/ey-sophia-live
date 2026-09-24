@@ -290,3 +290,10 @@ body {
     animation: none !important;
   }
 }
+
+/* Home join-code field: its own yellow focus glow replaces the global ring
+   (which would also square its corners). */
+.code-input:focus-visible {
+  outline: none;
+  border-radius: 1rem;
+}
