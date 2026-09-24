@@ -69,7 +69,7 @@ function mapPoll(r: PollRow): Poll {
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
-    assistantEnabled: r.assistant_enabled ?? true,
+    assistantEnabled: r.assistant_enabled ?? false,
     // Phones never schedule Broqui themselves (projector-only); the shared
     // Poll type still needs these fields, so ship the scheduler defaults.
     assistantMinSeconds: INTERVAL_DEFAULTS.min,
@@ -115,7 +115,7 @@ export default async function VotePage({
     .maybeSingle<PollRow>();
 
   // SAFE FALLBACK: pre-migration DB (assistant_enabled missing) — retry
-  // without it and let mapPoll default to enabled:true, rather than 404ing
+  // without it and let mapPoll default to enabled:false, rather than 404ing
   // every voter.
   if (pollErr) {
     ({ data: pollData, error: pollErr } = await supabase

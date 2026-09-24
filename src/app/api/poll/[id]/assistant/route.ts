@@ -63,7 +63,7 @@ export async function GET(
 
   return NextResponse.json(
     {
-      enabled: data.assistant_enabled ?? true,
+      enabled: data.assistant_enabled ?? false,
       min: data.assistant_min_interval_s ?? INTERVAL_DEFAULTS.min,
       max: data.assistant_max_interval_s ?? INTERVAL_DEFAULTS.max,
       updatedAt: data.assistant_updated_at,

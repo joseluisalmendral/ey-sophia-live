@@ -28,7 +28,8 @@ export default function NewPollPage() {
       { name: "", color: "#FFE600" },
       { name: "", color: "#96d3b4" },
     ],
-    assistantEnabled: true,
+    // Broqui is opt-in: new polls start with the mascot OFF.
+    assistantEnabled: false,
     assistantMinSeconds: INTERVAL_DEFAULTS.min,
     assistantMaxSeconds: INTERVAL_DEFAULTS.max,
   };

@@ -102,7 +102,7 @@ export function VoteShell({
       >
         <PhoneHeader />
 
-        {poll.assistantEnabled !== false && (
+        {poll.assistantEnabled === true && (
           <MascotBoundary name="phone">
             <PhoneMascot
               phase={phase}
