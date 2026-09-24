@@ -17,8 +17,8 @@ export const COPY = {
   // Lobby
   lobbyKicker: "En breve",
   lobbyKickerCountdown: "Preparados…",
-  lobbyTitle: "La votación abre en breve",
-  lobbyHint: "Se abrirá aquí sola, sin recargar.",
+  lobbyTitle: "La votación aún no está abierta",
+  lobbyHint: "Espera un momento. Cuando el presentador la abra, aquí aparecerán los candidatos para votar.",
   opensIn: "Abre en",
   finalists: "Los finalistas",
   howTitle: "Cómo va",

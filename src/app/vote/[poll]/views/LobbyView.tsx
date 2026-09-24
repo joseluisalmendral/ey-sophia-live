@@ -4,27 +4,20 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { durations, easings } from "@/lib/motion/tokens";
 import type { Poll, Team } from "@/lib/types";
-import {
-  COPY,
-  Kicker,
-  ScreenIcon,
-  TapIcon,
-  ViewWrap,
-  VoteIcon,
-} from "./shared";
+import { COPY, Kicker, ViewWrap } from "./shared";
 
 /**
- * LobbyView — the voter's PRE-OPEN state (retention, spec §3.1.2).
+ * LobbyView — the voter's PRE-OPEN state.
  *
- * Unmistakably "not yet": no selectable cards. It keeps the wait alive with a
- * countdown hero (when a count-in is configured), the finalists list (phones
- * always see real identities; read-only rows, no numbering) and the 3-step
- * "Cómo va" (Elige · Vota · Mira la pantalla). The mascot host row
- * above (PhoneMascot) carries the ambient lines and the poke.
+ * DELIBERATELY does NOT render the candidates: showing them before the poll
+ * opens made voters think they could already pick. The screen must make it
+ * unmistakable that voting has NOT started yet — a pulsing wait cue, a clear
+ * message and (when a count-in is configured) a live "Abre en MM:SS". The
+ * candidate cards appear the instant the poll opens (the flow flips locally
+ * at opensAt), so the transition feels like a real "start".
  */
 export function LobbyView({
   poll,
-  teams,
   opensAt,
   reduced,
 }: {
@@ -34,95 +27,47 @@ export function LobbyView({
   reduced: boolean;
 }) {
   const isCountdown = poll.status === "countdown";
-  const rise = (i: number) => ({
-    initial: reduced ? { opacity: 0 } : { opacity: 0, y: 14 },
-    animate: { opacity: 1, y: 0 },
-    transition: {
-      delay: reduced ? 0 : 0.08 + i * 0.07,
-      duration: durations.base,
-      ease: easings.decel,
-    },
-  });
 
   return (
     <ViewWrap reduced={reduced}>
-      <div className="flex flex-col gap-6 pt-2">
-        <motion.div {...rise(0)} className="flex flex-col gap-2">
+      <div className="flex min-h-[62svh] flex-col items-center justify-center gap-7 pt-2 text-center">
+        {/* Wait cue: a soft pulsing ring so it reads as "not yet", not "broken". */}
+        <motion.div
+          aria-hidden
+          initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
+          animate={
+            reduced
+              ? { opacity: 1 }
+              : { opacity: [0.85, 1, 0.85], scale: [1, 1.06, 1] }
+          }
+          transition={
+            reduced
+              ? { duration: durations.base }
+              : { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
+          }
+          className="flex h-24 w-24 items-center justify-center rounded-full border border-ey-yellow/30 bg-ey-yellow/[0.06] text-5xl shadow-[0_0_40px_-8px_rgb(255_230_0/0.35)]"
+        >
+          ⏳
+        </motion.div>
+
+        <motion.div
+          initial={reduced ? { opacity: 0 } : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: reduced ? 0 : 0.08, duration: durations.base, ease: easings.decel }}
+          className="flex flex-col items-center gap-3"
+        >
           <Kicker>{isCountdown ? COPY.lobbyKickerCountdown : COPY.lobbyKicker}</Kicker>
           <h1 className="text-balance font-display text-m-title font-extrabold leading-[1.08] text-text">
             {COPY.lobbyTitle}
           </h1>
-          <p className="text-m-body leading-snug text-text-dim">{COPY.lobbyHint}</p>
+          <p className="max-w-xs text-balance text-m-body leading-snug text-text-dim">
+            {COPY.lobbyHint}
+          </p>
         </motion.div>
 
         <OpensInCountdown opensAt={opensAt} reduced={reduced} />
-
-        {teams.length > 0 && (
-          <motion.section {...rise(1)} aria-labelledby="finalists-h" className="flex flex-col gap-2.5">
-            <h2 id="finalists-h" className="flex items-baseline justify-between">
-              <Kicker className="text-text-dim">{COPY.finalists}</Kicker>
-              <span className="text-m-label font-semibold text-text-dim/70">{teams.length}</span>
-            </h2>
-            <ul className="flex flex-col gap-2">
-              {teams.map((team) => (
-                <li
-                  key={team.id}
-                  className="vrow"
-                  style={{ ["--team" as string]: team.color }}
-                >
-                  <span className="vcard__spine" aria-hidden />
-                  <span className="line-clamp-2 font-display text-m-body font-bold leading-tight text-text">
-                    {team.name}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </motion.section>
-        )}
-
-        <motion.section {...rise(2)} aria-labelledby="how-h" className="flex flex-col gap-2.5">
-          <h2 id="how-h">
-            <Kicker className="text-text-dim">{COPY.howTitle}</Kicker>
-          </h2>
-          <ol className="vpanel grid grid-cols-3 gap-1 px-2 py-3.5">
-            <Step n={1} label={COPY.howPick} icon={<TapIcon size={22} />} />
-            <Step n={2} label={COPY.howVote} icon={<VoteIcon size={22} />} accent />
-            <Step n={3} label={COPY.howWatch} icon={<ScreenIcon size={22} />} />
-          </ol>
-        </motion.section>
       </div>
     </ViewWrap>
-  );
-}
-
-function Step({
-  n,
-  label,
-  icon,
-  accent = false,
-}: {
-  n: number;
-  label: string;
-  icon: React.ReactNode;
-  accent?: boolean;
-}) {
-  return (
-    <li className="flex flex-col items-center gap-2 text-center">
-      <span
-        className={`flex h-11 w-11 items-center justify-center rounded-full ${
-          accent
-            ? "bg-ey-yellow/12 text-ey-yellow ring-1 ring-ey-yellow/40"
-            : "bg-white/[0.06] text-text ring-1 ring-white/12"
-        }`}
-        aria-hidden
-      >
-        {icon}
-      </span>
-      <span className="text-[0.8125rem] font-semibold leading-tight text-text">
-        <span className="sr-only">Paso {n}: </span>
-        {label}
-      </span>
-    </li>
   );
 }
 
