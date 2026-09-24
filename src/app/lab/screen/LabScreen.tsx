@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { MascotHost, type MascotCommand, type MascotLabBridge } from "@/components/mascot/MascotHost";
 import { ScreenStage } from "@/components/screen/ScreenStage";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
@@ -32,9 +33,12 @@ const KEEPOUT_CSS = `
 export function LabScreen({
   drive,
   autoplay,
+  mascotCrash = false,
 }: {
   drive: LabSettings | null;
   autoplay: boolean;
+  /** QA only (?mascotCrash=1): MascotHost throws on render to prove isolation. */
+  mascotCrash?: boolean;
 }) {
   // Mascot command bus: control-room messages → the host mounted below.
   const listeners = useRef(new Set<(cmd: MascotCommand) => void>());
@@ -61,8 +65,9 @@ export function LabScreen({
         return () => listeners.current.delete(cb);
       },
       report: (report) => post({ type: "mascot", report }),
+      crash: mascotCrash,
     }),
-    [post],
+    [post, mascotCrash],
   );
 
   if (!snap) return <LabWaiting />;
@@ -125,16 +130,18 @@ function LabScreenStage({
         ready
         reduced={reduced}
         mascotSlot={
-          <MascotHost
-            config={{
-              enabled: settings.assistant.enabled,
-              min: settings.assistant.minIntervalS,
-              max: settings.assistant.maxIntervalS,
-            }}
-            reduced={reduced}
-            rngSeed={settings.seed}
-            lab={bridge}
-          />
+          <MascotBoundary name="lab">
+            <MascotHost
+              config={{
+                enabled: settings.assistant.enabled,
+                min: settings.assistant.minIntervalS,
+                max: settings.assistant.maxIntervalS,
+              }}
+              reduced={reduced}
+              rngSeed={settings.seed}
+              lab={bridge}
+            />
+          </MascotBoundary>
         }
       />
     </LabSettingsProvider>

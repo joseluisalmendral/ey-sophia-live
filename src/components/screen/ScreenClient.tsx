@@ -1,5 +1,6 @@
 "use client";
 
+import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { MascotHost, type MascotConfig } from "@/components/mascot/MascotHost";
 import { useLiveTally } from "@/lib/realtime/useLiveTally";
 import { useLocalStatusFlip } from "@/lib/polling/useLocalStatusFlip";
@@ -101,8 +102,13 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
       ready={live.ready}
       reduced={reduced}
       // Co-host: reads the derived stage data through ScreenStage's context.
-      // No new network calls or subscriptions.
-      mascotSlot={<MascotHost config={assistant} reduced={reduced} />}
+      // No new network calls or subscriptions. The boundary keeps a mascot
+      // failure from ever unmounting the chart/podium.
+      mascotSlot={
+        <MascotBoundary name="projector">
+          <MascotHost config={assistant} reduced={reduced} />
+        </MascotBoundary>
+      }
     />
   );
 }

@@ -23,5 +23,11 @@ export default async function LabScreenPage({
   guardLab();
   const sp = await searchParams;
   const drive = one(sp, "drive") === "1" ? settingsFromParams(sp) : null;
-  return <LabScreen drive={drive} autoplay={one(sp, "autoplay") === "1"} />;
+  return (
+    <LabScreen
+      drive={drive}
+      autoplay={one(sp, "autoplay") === "1"}
+      mascotCrash={one(sp, "mascotCrash") === "1"}
+    />
+  );
 }

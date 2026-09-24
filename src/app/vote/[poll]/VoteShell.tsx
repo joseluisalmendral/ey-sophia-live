@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ShaderBackground } from "@/components/providers/ShaderBackground";
+import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { PhoneMascot } from "@/components/mascot/PhoneMascot";
 import { durations, easings } from "@/lib/motion/tokens";
 import type { Poll, Team } from "@/lib/types";
@@ -102,13 +103,15 @@ export function VoteShell({
         <PhoneHeader />
 
         {poll.assistantEnabled !== false && (
-          <PhoneMascot
-            phase={phase}
-            teamName={votedTeam?.name ?? null}
-            rank={phase === "reveal" && revealArmed ? rank : null}
-            revealHeld={phase === "reveal" && !revealArmed}
-            reduced={reduced}
-          />
+          <MascotBoundary name="phone">
+            <PhoneMascot
+              phase={phase}
+              teamName={votedTeam?.name ?? null}
+              rank={phase === "reveal" && revealArmed ? rank : null}
+              revealHeld={phase === "reveal" && !revealArmed}
+              reduced={reduced}
+            />
+          </MascotBoundary>
         )}
 
         <AnimatePresence mode="wait">

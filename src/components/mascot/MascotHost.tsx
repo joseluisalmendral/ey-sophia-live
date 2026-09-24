@@ -127,6 +127,8 @@ export type MascotReport =
 export interface MascotLabBridge {
   subscribe?: (cb: (cmd: MascotCommand) => void) => () => void;
   report?: (msg: MascotReport) => void;
+  /** /lab QA only (?mascotCrash=1): throw on render to prove MascotBoundary. */
+  crash?: boolean;
 }
 
 export interface MascotHostProps {
@@ -1201,6 +1203,9 @@ export function MascotHost(props: MascotHostProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // /lab QA hook: prove a mascot render error never takes the stage down.
+  if (props.lab?.crash) throw new Error("MascotHost: lab crash requested (?mascotCrash=1)");
 
   return (
     <div

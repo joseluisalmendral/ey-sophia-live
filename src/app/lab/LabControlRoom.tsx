@@ -16,6 +16,7 @@ import type {
 import type { AssistantEventType } from "@/lib/assistant/detectEvents";
 import { runSelfCheck, type SelfCheckReport } from "@/lib/assistant/selfCheck";
 import type { Phase } from "@/app/vote/[poll]/phase";
+import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { ChartType, PollStatus, TieRule } from "@/lib/types";
 import type { LabMessage } from "@/lab/channel";
@@ -411,7 +412,9 @@ function Toolbar({
     <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-glass-border px-4 py-2">
       {/* Static cameo (the live co-host runs inside the projector frame). */}
       <div className="flex h-11 w-10 items-center justify-center" aria-hidden>
-        <Broqui size={44} expression="smug" reduced={reduced} />
+        <MascotBoundary name="lab-control">
+          <Broqui size={44} expression="smug" reduced={reduced} />
+        </MascotBoundary>
       </div>
       <h1 className="font-display text-h3 font-black leading-none">
         Sala de <span className="text-ey-yellow">ensayo</span>

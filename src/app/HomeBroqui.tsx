@@ -1,6 +1,7 @@
 "use client";
 
 import { Broqui } from "@/components/mascot/Broqui";
+import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 
 /**
@@ -14,7 +15,9 @@ export function HomeBroqui() {
       aria-hidden
       className="pointer-events-none absolute -top-11 right-2 z-10"
     >
-      <Broqui size={92} expression="smug" reduced={reduced} lookAt={{ x: -0.35, y: 0.35 }} />
+      <MascotBoundary name="home">
+        <Broqui size={92} expression="smug" reduced={reduced} lookAt={{ x: -0.35, y: 0.35 }} />
+      </MascotBoundary>
     </div>
   );
 }
