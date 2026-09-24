@@ -1,0 +1,93 @@
+/*
+ * Speech bubble — near-white card on the dark stage (spec §4.7 / motion §C3).
+ * Solid fill (no backdrop-filter), 2 px mint edge, 18 px tail with the same
+ * edge, big ink text readable from 10 m. Only transform/opacity animate.
+ */
+
+.bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--color-bubble-edge, #7ff0c4);
+  border-radius: var(--bubble-radius, 28px);
+  background: var(--color-bubble, #f6f6fa);
+  color: var(--color-bubble-ink, #14141c);
+  box-shadow:
+    0 12px 40px -12px rgb(0 0 0 / 0.6),
+    0 0 0 1px rgb(0 0 0 / 0.25);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.bubble-text {
+  display: block;
+}
+
+.bubble-word {
+  display: inline;
+  transition: opacity 110ms ease-out;
+}
+
+.bubble-word[data-hidden="true"] {
+  opacity: 0;
+}
+
+.bubble-word em,
+.bubble-text strong {
+  font-style: normal;
+  color: #0f4a4f;
+  font-weight: 800;
+}
+
+/* Tail: a rotated square sharing the edge colour; two sides bordered. */
+.bubble-tail {
+  position: absolute;
+  width: var(--bubble-tail, 18px);
+  height: var(--bubble-tail, 18px);
+  background: var(--color-bubble, #f6f6fa);
+  border: 2px solid var(--color-bubble-edge, #7ff0c4);
+  border-radius: 2px;
+}
+
+.bubble[data-side="left"] .bubble-tail {
+  right: calc(var(--bubble-tail, 18px) * -0.5 - 2px);
+  transform: translateY(-50%) rotate(45deg);
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.bubble[data-side="right"] .bubble-tail {
+  left: calc(var(--bubble-tail, 18px) * -0.5 - 2px);
+  transform: translateY(-50%) rotate(45deg);
+  border-right-color: transparent;
+  border-top-color: transparent;
+}
+
+.bubble[data-side="above"] .bubble-tail,
+.bubble[data-side="above-left"] .bubble-tail,
+.bubble[data-side="above-right"] .bubble-tail {
+  bottom: calc(var(--bubble-tail, 18px) * -0.5 - 2px);
+  transform: translateX(-50%) rotate(45deg);
+  border-left-color: transparent;
+  border-top-color: transparent;
+}
+
+.bubble[data-side="below"] .bubble-tail {
+  top: calc(var(--bubble-tail, 18px) * -0.5 - 2px);
+  transform: translateX(-50%) rotate(45deg);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-word {
+    transition: none;
+  }
+}

@@ -57,6 +57,7 @@ export const BarRace = memo(function BarRace({
     <ul
       className="flex w-full flex-col justify-center gap-[clamp(0.5rem,1.4vh,1.1rem)]"
       style={{ opacity: frozen ? 0.5 : 1, transition: "opacity 320ms ease" }}
+      data-mascot-keepout="chart"
     >
       {teams.map((team) => {
         const isLeader = team.rank === 1 && team.count > 0;
@@ -75,6 +76,7 @@ export const BarRace = memo(function BarRace({
             layout
             transition={reduced ? { duration: 0.2 } : springs.podiumRise}
             className="relative"
+            data-rank={team.rank}
           >
             <div className="flex items-center gap-[clamp(0.5rem,1.2vw,1rem)]">
               {/* Rank pill */}

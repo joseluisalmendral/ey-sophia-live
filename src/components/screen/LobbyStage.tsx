@@ -6,7 +6,6 @@ import { QrCode } from "@/components/atoms/QrCode";
 import { CountInTimer } from "@/components/atoms/CountInTimer";
 import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
-import { EyBeam } from "@/components/brand/EyBeam";
 import { durations, easings } from "@/lib/motion/tokens";
 import { teamInitial } from "./anonymize";
 import type { Poll, RankedTeam, Team } from "@/lib/types";
@@ -99,6 +98,7 @@ export const LobbyStage = memo(function LobbyStage({
             initial={reduced ? { opacity: 0 } : { opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: durations.base, ease: easings.decel }}
+            data-mascot-keepout="countdown"
           >
             <CountInTimer opensAt={opensAt} />
           </motion.div>
@@ -108,6 +108,7 @@ export const LobbyStage = memo(function LobbyStage({
           initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: durations.slow, ease: easings.decel }}
+          data-mascot-keepout="qr"
         >
           {/* Fluid QR: scales with the stage (viewport-capped) so it fills the
               join column on a big projector without ever forcing scroll. */}
@@ -145,6 +146,7 @@ export const LobbyStage = memo(function LobbyStage({
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: durations.base }}
                 className="flex items-baseline gap-2 overflow-hidden"
+                data-mascot-keepout="counter"
               >
                 <span
                   ref={counterScope}
@@ -168,6 +170,7 @@ export const LobbyStage = memo(function LobbyStage({
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: durations.slow, ease: easings.decel }}
           className="flex flex-col gap-[clamp(0.35rem,1vh,0.7rem)]"
+          data-mascot-keepout="title"
         >
           <h1 className="font-display text-[clamp(1.9rem,3.4vw,3.5rem)] font-black leading-none text-text">
             {poll.title}
@@ -177,7 +180,7 @@ export const LobbyStage = memo(function LobbyStage({
           </span>
         </motion.div>
 
-        <ul className="flex flex-col gap-[clamp(0.6rem,1.6vh,1.2rem)]">
+        <ul className="flex flex-col gap-[clamp(0.6rem,1.6vh,1.2rem)]" data-mascot-keepout="finalists">
           {cards.map((team, i) => (
             <motion.li
               key={team.id}
@@ -216,7 +219,41 @@ export const LobbyStage = memo(function LobbyStage({
 
       {/* Fallback join path — a single discreet line pinned to the stage foot,
           well away from the QR block, for phones that can't scan. */}
-      <p className="pointer-events-none absolute inset-x-0 bottom-[clamp(0.5rem,1.4vh,1rem)] text-center text-[clamp(0.65rem,0.9vw,0.85rem)] tracking-wide text-text-dim/70">
+      {/* Mascot anchors (layout-reserved, empty): bottom-right lane, top-right
+          corner and the gap between the two columns. The host validates each
+          against the keep-outs above at runtime and skips any that collide. */}
+      <div
+        data-mascot-anchor="lobby-lane"
+        data-mascot-size="220"
+        data-mascot-bubble="left,above-left"
+        data-mascot-bubble-max="0.36"
+        data-mascot-edge="right"
+        className="pointer-events-none absolute bottom-[5%] right-[2%] h-[27%] w-[22%]"
+        aria-hidden
+      />
+      <div
+        data-mascot-anchor="lobby-top"
+        data-mascot-size="170"
+        data-mascot-bubble="left,below,above-left"
+        data-mascot-bubble-max="0.4"
+        data-mascot-edge="right"
+        className="pointer-events-none absolute right-[2%] top-[1%] h-[19%] w-[15%]"
+        aria-hidden
+      />
+      <div
+        data-mascot-anchor="lobby-mid"
+        data-mascot-size="150"
+        data-mascot-bubble="below,above,left"
+        data-mascot-bubble-max="0.26"
+        data-mascot-edge="bottom"
+        className="pointer-events-none absolute left-[35.5%] top-[3%] h-[22%] w-[9%]"
+        aria-hidden
+      />
+
+      <p
+        className="pointer-events-none absolute bottom-[clamp(0.5rem,1.4vh,1rem)] left-1/2 w-max max-w-full -translate-x-1/2 text-center text-[clamp(0.65rem,0.9vw,0.85rem)] tracking-wide text-text-dim/70"
+        data-mascot-keepout="code"
+      >
         ¿No puedes escanear? Entra en{" "}
         {domain && <span className="font-semibold text-text-dim">{domain}/</span>}{" "}
         con el código{" "}

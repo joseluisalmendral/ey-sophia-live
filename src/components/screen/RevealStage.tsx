@@ -42,6 +42,7 @@ import type { RankedTeam, TieRule } from "@/lib/types";
  */
 
 type Beat = "suspense" | "curtain" | "cameras" | "podium";
+export type { Beat as RevealStageBeat };
 
 export interface RevealStageProps {
   teams: RankedTeam[];
@@ -54,6 +55,11 @@ export interface RevealStageProps {
    * finale + a false "Sin votos esta vez" podium while real votes are in flight).
    */
   ready: boolean;
+  /**
+   * Reports every beat change (mount included) so the projector can hide the
+   * mascot during the curtain + camera cuts. Presentation is unchanged.
+   */
+  onBeatChange?: (beat: Beat) => void;
 }
 
 function wait(ms: number) {
@@ -174,13 +180,20 @@ function useRevealChoreography(
   return { beat, finalOutcome, scope, muted, toggleMute };
 }
 
-export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps) {
+export function RevealStage({ teams, tieRule, reduced, ready, onBeatChange }: RevealStageProps) {
   const liveOutcome = resolveReveal(teams, tieRule);
   const { beat, finalOutcome, scope, muted, toggleMute } = useRevealChoreography(
     liveOutcome,
     reduced,
     ready,
   );
+  const onBeatChangeRef = useRef(onBeatChange);
+  useEffect(() => {
+    onBeatChangeRef.current = onBeatChange;
+  }, [onBeatChange]);
+  useEffect(() => {
+    onBeatChangeRef.current?.(beat);
+  }, [beat]);
   // Teasers/podium always celebrate the captured fire-time outcome.
   const outcome = finalOutcome ?? liveOutcome;
   const curtainOpenSeconds = (reduced ? REVEAL_BEATS_REDUCED : REVEAL_BEATS).curtainOpen;
@@ -196,6 +209,7 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
         onClick={toggleMute}
         className="absolute right-[clamp(1rem,2vw,2rem)] top-[clamp(1rem,2vh,2rem)] z-30 flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-text-dim backdrop-blur transition-colors hover:text-text"
         aria-label={muted ? "Activar sonido" : "Silenciar"}
+        data-mascot-keepout="mute"
       >
         {muted ? <SpeakerOff /> : <SpeakerOn />}
       </button>
@@ -211,13 +225,24 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
             transition={{ duration: durations.base }}
             className="relative z-10 flex h-full flex-col items-center justify-center gap-6 text-center"
           >
-            <span className="text-[clamp(0.9rem,1.4vw,1.3rem)] font-bold uppercase tracking-[0.4em] text-ey-yellow">
+            {/* Mascot peeks over the bottom edge here (right of centre). */}
+            <div
+              data-mascot-anchor="peek"
+              data-mascot-size="220"
+              data-mascot-bubble="above-left,above"
+              data-mascot-bubble-max="0.36"
+              data-mascot-edge="bottom"
+              className="pointer-events-none absolute bottom-0 left-[70%] h-[8%] w-[16%]"
+              aria-hidden
+            />
+            <span className="text-[clamp(0.9rem,1.4vw,1.3rem)] font-bold uppercase tracking-[0.4em] text-ey-yellow" data-mascot-keepout="title">
               Resultado final
             </span>
             <motion.h2
               animate={reduced ? undefined : { opacity: [0.5, 1, 0.5] }}
               transition={reduced ? undefined : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
               className="font-display text-[clamp(2rem,6vw,5.5rem)] font-black leading-none text-text"
+              data-mascot-keepout="title"
             >
               Y el equipo ganador es…
             </motion.h2>
@@ -239,6 +264,31 @@ export function RevealStage({ teams, tieRule, reduced, ready }: RevealStageProps
               ) : (
                 <Podium outcome={outcome} reduced={reduced} />
               ))}
+            {/* Mascot anchors on the podium margins (bottom-aligned). */}
+            {beat === "podium" && (
+              <>
+                <div
+                  data-mascot-anchor="podium-right"
+                  data-mascot-size="220"
+                  data-mascot-bubble="above,above-left"
+                  data-mascot-bubble-max="0.4"
+                  data-mascot-edge="right"
+                  data-mascot-align="center"
+                  className="pointer-events-none absolute right-[1.5%] top-[26%] h-[44%] w-[17%]"
+                  aria-hidden
+                />
+                <div
+                  data-mascot-anchor="podium-left"
+                  data-mascot-size="220"
+                  data-mascot-bubble="above,above-right"
+                  data-mascot-bubble-max="0.4"
+                  data-mascot-edge="left"
+                  data-mascot-align="center"
+                  className="pointer-events-none absolute left-[1.5%] top-[26%] h-[44%] w-[17%]"
+                  aria-hidden
+                />
+              </>
+            )}
 
             {/* CAMERAS beat: pure black + 3 videogame-style cuts behind the
                 opening curtain; its exit retracts the letterbox onto the podium. */}

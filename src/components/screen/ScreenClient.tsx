@@ -1,5 +1,6 @@
 "use client";
 
+import { MascotHost } from "@/components/mascot/MascotHost";
 import { useLiveTally } from "@/lib/realtime/useLiveTally";
 import { useLocalStatusFlip } from "@/lib/polling/useLocalStatusFlip";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
@@ -31,8 +32,27 @@ export interface ScreenClientProps {
   voterUrl: string;
 }
 
+/**
+ * Assistant config fields land with E4 (migration + admin form). Until then
+ * the Poll row may not carry them: read structurally and fall back to the
+ * defaults {enabled, 14 s, 28 s}. The host also sanitizes the interval.
+ */
+function assistantConfig(poll: Poll) {
+  const p = poll as Poll & {
+    assistantEnabled?: boolean | null;
+    assistantMinSeconds?: number | null;
+    assistantMaxSeconds?: number | null;
+  };
+  return {
+    enabled: p.assistantEnabled ?? true,
+    min: p.assistantMinSeconds ?? 14,
+    max: p.assistantMaxSeconds ?? 28,
+  };
+}
+
 export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
   const reduced = useReducedMotionPref();
+  const assistant = assistantConfig(poll);
   // Effective status derived from the SSR snapshot ALONE (local flip included):
   // before the first status broadcast the hook has no status, so this is the
   // only signal that the poll is already open — it keeps the open-poll resync
@@ -82,6 +102,9 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
       connectionState={live.connectionState}
       ready={live.ready}
       reduced={reduced}
+      // Co-host: reads the derived stage data through ScreenStage's context.
+      // No new network calls or subscriptions.
+      mascotSlot={<MascotHost config={assistant} reduced={reduced} />}
     />
   );
 }

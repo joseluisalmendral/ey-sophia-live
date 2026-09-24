@@ -723,6 +723,9 @@ export function Broqui({
       case "enter": {
         const start = off(from);
         const axis = from === "bottom" ? rig.rootY : rig.rootX;
+        // A previous exit may have left the OTHER axis off-stage: reset it so
+        // an exit-right → enter-bottom sequence lands exactly on the wrapper.
+        (from === "bottom" ? rig.rootX : rig.rootY).set(0);
         rig.rootOpacity.set(0);
         axis.set(start);
         rig.rootRot.set(from === "left" ? -8 : from === "bottom" ? 0 : 8);

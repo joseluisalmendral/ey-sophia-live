@@ -127,7 +127,7 @@ function PodiumBlock({
     : `linear-gradient(180deg, color-mix(in srgb, ${team.color} 45%, var(--color-cosmic-700)) 0%, color-mix(in srgb, ${team.color} 22%, var(--color-cosmic-700)) 100%)`;
 
   return (
-    <div className="flex w-[clamp(9rem,24vw,21rem)] flex-col items-center">
+    <div className="flex w-[clamp(9rem,24vw,21rem)] flex-col items-center" data-mascot-keepout="podium">
       {/* Crown above winners */}
       <div className="flex h-[clamp(5.5rem,14vh,9.5rem)] items-end justify-center">
         {isWinner && (

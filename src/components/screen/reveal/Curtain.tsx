@@ -51,7 +51,7 @@ export function Curtain({ reduced, openSeconds }: CurtainProps) {
     >
       {/* LEFT panel — EY IA Hackathon */}
       <CurtainPanel side="left" reduced={reduced} close={closeTransition} open={openTransition}>
-        <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-6" data-mascot-keepout="curtain">
           <EyBeam surface="dark" size={116} label="EY" />
           <div className="flex max-w-[42vw] flex-col items-center gap-2 text-center">
             <span className="text-balance font-display text-[clamp(2.4rem,6.2vw,5.8rem)] font-extrabold leading-none tracking-tight text-text">
@@ -65,7 +65,7 @@ export function Curtain({ reduced, openSeconds }: CurtainProps) {
       </CurtainPanel>
 
       <CurtainPanel side="right" reduced={reduced} close={closeTransition} open={openTransition}>
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4" data-mascot-keepout="curtain">
           <span className="inline-flex items-center rounded-[20px] bg-white px-8 py-5 shadow-[0_2px_10px_rgba(0,0,0,0.4)]">
             <Image src="/brand/thepower-logo.webp" alt="thePower" width={320} height={80} />
           </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, type ReactNode } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ShaderBackground } from "@/components/providers/ShaderBackground";
 import { CodeBadge } from "@/components/atoms/CodeBadge";
@@ -24,6 +24,7 @@ import { BarRace } from "./BarRace";
 import { ChartView } from "./ChartView";
 import { LobbyStage } from "./LobbyStage";
 import { RevealStage } from "./RevealStage";
+import { ScreenStageProvider, type RevealBeat, type ScreenStageFrame } from "./ScreenStageContext";
 
 /**
  * ScreenStage — the PRESENTATIONAL projector board (no data hooks, no network).
@@ -92,6 +93,9 @@ export function ScreenStage({
   mascotSlot = null,
 }: ScreenStageProps) {
   const showNames = poll.showLegend ? SHOW_NAMES_DEFAULT : false;
+  // Reveal beat (suspense → curtain → cameras → podium) reported by RevealStage
+  // so the mascot slot can hide itself during the curtain + camera cuts.
+  const [revealBeat, setRevealBeat] = useState<RevealBeat | null>(null);
 
   const positionById = useMemo(() => buildPositionIndex(teams), [teams]);
   const anonymized = poll.anonymousDisplay && status === "open";
@@ -109,6 +113,22 @@ export function ScreenStage({
   // race/donut/podium. Show a calm "in preparation" board instead. Uses the SSR
   // teams as the authority (liveTeams may be empty before the RPC resolves).
   const hasTeams = teams.length > 0;
+
+  // Derived projector data for the mascot slot (read-only, masked upstream).
+  const frame = useMemo<ScreenStageFrame>(
+    () => ({
+      status,
+      teams: displayLiveTeams,
+      anonymized,
+      chartType: poll.chartType,
+      opensAt,
+      closesAt,
+      joined,
+      revealBeat: status === "closed" ? revealBeat : null,
+    }),
+    [status, displayLiveTeams, anonymized, poll.chartType, opensAt, closesAt, joined, revealBeat],
+  );
+
   if (!hasTeams) {
     return (
       <ShaderBackground>
@@ -132,6 +152,7 @@ export function ScreenStage({
       {/* 16:9 projector frame. Aspect-locked + centered so it reads identically
           on any projector; full-bleed dark stage underneath. */}
       <main className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden">
+        <ScreenStageProvider value={frame}>
         <div className="relative flex aspect-video max-h-[100dvh] w-full max-w-[177.78vh] flex-col">
           {/* Top brand bar (hidden during reveal so the finale owns the stage). */}
           <AnimatePresence>
@@ -143,7 +164,7 @@ export function ScreenStage({
                 transition={{ duration: durations.base, ease: easings.standard }}
                 className="z-10 flex shrink-0 items-center justify-between px-[clamp(1.5rem,4vw,4rem)] pt-[clamp(0.8rem,2.5vh,2rem)]"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3" data-mascot-keepout="header">
                   <EyBeam surface="dark" size={36} label="" />
                   <span className="font-display text-[clamp(0.95rem,1.9vw,1.8rem)] font-black leading-none tracking-tight text-text">
                     <span className="text-sophia-accent glow-sophia">IA</span> HACKATHON
@@ -156,7 +177,7 @@ export function ScreenStage({
                 {/* Right side: connection meta (live only). The close countdown
                     lives prominently in the LiveStage join rail, not here. */}
                 {status === "open" && (
-                  <div className="flex items-center gap-[clamp(0.75rem,2vw,1.5rem)]">
+                  <div className="flex items-center gap-[clamp(0.75rem,2vw,1.5rem)]" data-mascot-keepout="status">
                     <ConnectionDot state={connectionState} />
                   </div>
                 )}
@@ -212,6 +233,7 @@ export function ScreenStage({
                     tieRule={poll.tieRule}
                     reduced={reduced}
                     ready={ready}
+                    onBeatChange={setRevealBeat}
                   />
                 </motion.div>
               )}
@@ -222,6 +244,7 @@ export function ScreenStage({
               transitions never remount it. */}
           {mascotSlot}
         </div>
+        </ScreenStageProvider>
       </main>
     </ShaderBackground>
   );
@@ -283,16 +306,23 @@ const LiveStage = memo(function LiveStage({
         <span className="font-display text-[clamp(0.7rem,1.1vw,1.05rem)] font-bold uppercase tracking-[0.22em] text-text-dim">
           Escanea para unirte
         </span>
-        <QrCode
-          value={voterUrl}
-          size={280}
-          className="w-[min(clamp(200px,15.5vw,300px),34vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
-        />
-        <CodeBadge code={poll.joinCode} caption="Únete" size="inline" />
+        <div data-mascot-keepout="qr" className="flex w-full justify-center">
+          <QrCode
+            value={voterUrl}
+            size={280}
+            className="w-[min(clamp(200px,15.5vw,300px),34vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
+          />
+        </div>
+        <div data-mascot-keepout="code">
+          <CodeBadge code={poll.joinCode} caption="Únete" size="inline" />
+        </div>
         {/* Prominent close countdown when a duration was configured. Pulses < 10s
             (handled inside CountdownTimer). Server-authoritative from closesAt. */}
         {closesAt && (
-          <div className="mt-[clamp(0.4rem,1.5vh,1.4rem)] flex flex-col items-center gap-1">
+          <div
+            className="mt-[clamp(0.4rem,1.5vh,1.4rem)] flex flex-col items-center gap-1"
+            data-mascot-keepout="countdown"
+          >
             <span className="font-display text-[clamp(0.6rem,0.9vw,0.9rem)] font-bold uppercase tracking-[0.22em] text-text-dim">
               Cierra en
             </span>
@@ -301,8 +331,41 @@ const LiveStage = memo(function LiveStage({
         )}
       </div>
 
-      {/* Visualization */}
-      <div className="flex h-full min-h-0 flex-col justify-center">
+      {/* Visualization pane: a reserved TOP BAND for the co-host (mascot at
+          either end, bubble extending inwards) and the chart in the remaining
+          height, vertically centred. The band is layout, not decoration: the
+          chart never grows into it, so the mascot never covers a bar. */}
+      <div className="relative flex h-full min-h-0 flex-col">
+        <div className="relative h-[18%] w-full shrink-0" aria-hidden>
+          <div
+            data-mascot-anchor="live-band-right"
+            data-mascot-size="190"
+            data-mascot-bubble="left,above-left"
+            data-mascot-bubble-max="0.44"
+            data-mascot-edge="right"
+            className="absolute inset-y-0 right-0 w-[19%]"
+          />
+          <div
+            data-mascot-anchor="live-band-left"
+            data-mascot-size="180"
+            data-mascot-bubble="right,above-right"
+            data-mascot-bubble-max="0.44"
+            data-mascot-edge="right"
+            className="absolute inset-y-0 left-0 w-[19%]"
+          />
+        </div>
+        {/* Bottom-right corner of the pane: free when the race has ≤ 4 rows
+            (validated against the chart keep-out at runtime). */}
+        <div
+          data-mascot-anchor="live-corner"
+          data-mascot-size="180"
+          data-mascot-bubble="left,above-left"
+          data-mascot-bubble-max="0.4"
+          data-mascot-edge="right"
+          className="pointer-events-none absolute bottom-0 right-0 h-[24%] w-[18%]"
+          aria-hidden
+        />
+        <div className="flex min-h-0 flex-1 flex-col justify-center">
         {/* Suspense badge: discreet but visible — the audience must know the
             hidden identities are intentional drama, not a rendering glitch. */}
         {anonymized && (
@@ -311,6 +374,7 @@ const LiveStage = memo(function LiveStage({
             animate={{ opacity: 1 }}
             transition={{ duration: durations.base }}
             className="mb-[clamp(0.5rem,1.4vh,1rem)] flex items-center justify-center gap-2"
+            data-mascot-keepout="badge"
           >
             <span
               aria-hidden
@@ -325,7 +389,7 @@ const LiveStage = memo(function LiveStage({
         {isDivRace ? (
           <BarRace teams={liveTeams} showNames={showNames} reduced={reduced} />
         ) : (
-          <div className="h-full min-h-0 w-full">
+          <div className="h-full min-h-0 w-full" data-mascot-keepout="chart">
             <ChartView
               type={poll.chartType === "donut" ? "donut" : "columns"}
               teams={liveTeams}
@@ -334,6 +398,7 @@ const LiveStage = memo(function LiveStage({
             />
           </div>
         )}
+        </div>
       </div>
     </div>
   );
