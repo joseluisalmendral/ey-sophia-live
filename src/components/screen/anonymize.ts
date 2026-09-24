@@ -1,75 +1,227 @@
-import type { RankedTeam, Team } from "@/lib/types";
+import { mulberry32 } from "@/lib/assistant/rng";
 
 /**
  * anonymize — presentation-layer identity masking for the projector.
  *
  * When a poll runs with `anonymous_display`, the big screen must show HOW the
- * race is going without showing WHO is who. This module rewrites only the
- * identity fields (name + color) of the display rows; counts, ranks and
- * percentages pass through untouched, so BarRace / donut / columns all render
- * the anonymized race for free (the mapping runs BEFORE the render).
+ * race is going without showing WHO is who. Identities hide ONLY while the
+ * vote is OPEN: the lobby shows the real finalists and the reveal names them.
+ * This module rewrites only the identity fields (name + color) of the display
+ * rows; counts, ranks and percentages pass through untouched, so BarRace /
+ * donut / columns all render the anonymized race for free.
  *
- * Labels: every masked team has an EMPTY name — no label at all (not even a
- * placeholder), so nothing on screen invites the room to map labels to teams.
- * Visual tracking of each bar is carried by the grey variants + the bar's
- * position, never by the label.
+ * LABEL: every hidden candidate reads just "?" (chips included). No letters,
+ * no numbers — any per-team label invites the room to map labels to teams.
  *
- * Color assignment is keyed on the team's CONFIGURED position, NEVER on the
- * current ranking: a rank-based shade would re-identify teams the moment bars
- * swap (the shade would visibly follow the movement the audience already
- * associates with a team). Position is stable for the whole run, so each bar
- * keeps its shade and can be followed as a bar — without leaking which real
- * team it is.
+ * COLORS: N colors from a curated projector palette (vivid, bright enough for
+ * a legible label on the dark stage), picked greedily to MAXIMISE the minimum
+ * perceptual distance (OKLab ΔE) to every real team color, to the EY yellow
+ * accent and to each other. So no hidden bar can be read as "the green team".
  *
- * Colors: N NEUTRAL GREYS — never the EY yellow accent, never anything close to
- * a real team color (the event teams are green, purple, orange, blue and
- * yellow; even a muted indigo reads as "the blue team"). Saturation stays at
- * ~5% (no perceivable tint) and the variants differ by a lightness ramp, so
- * each bar is followable across FLIP reorders while the whole set reads as
- * "identity withheld". Labels drawn on top must keep using pickTextOn.
+ * ASSIGNMENT: a seeded DERANGEMENT of the lobby order — the team at lobby
+ * position i never gets anonymous slot i — so slot order leaks nothing. The
+ * seed is hash(pollId + runSeq): stable across reloads during a run,
+ * different for every relaunch, and identical on the server (RSC wall in
+ * load.ts) and the client (ScreenStage + realtime tallies keyed by team id).
  */
+
+/** The single masked label every hidden candidate shares. */
+export const ANONYMOUS_NAME = "?";
 
 /**
- * The single masked label: the EMPTY string. All hidden teams share it on
- * purpose — any per-team label (letters, numbers, even "???") invites the room
- * to map labels to teams. teamInitials("") yields "" so the chips collapse to a
- * plain grey dot too.
+ * Curated anonymous palette (order = tie-break priority). Vivid mid-to-light
+ * hues that stay legible on the cosmic stage and carry a readable label via
+ * pickTextOn. Deliberately no greys, no white and no EY yellow.
  */
-export const ANONYMOUS_NAME = "";
+export const ANON_PALETTE: readonly string[] = [
+  "#FF3D9A", // hot pink
+  "#38BDF8", // sky
+  "#2DD4BF", // teal
+  "#FF5A5F", // coral red
+  "#E879F9", // orchid
+  "#A3E635", // lime
+  "#22D3EE", // cyan
+  "#E11D48", // crimson
+  "#5EEAD4", // aqua
+  "#C026D3", // magenta
+  "#00E5A0", // spring
+  "#FB7185", // rose
+  "#60A5FA", // cornflower
+];
 
-/** Convert HSL (h 0-360, s/l 0-100) to a #rrggbb hex string. */
-function hslToHex(h: number, s: number, l: number): string {
-  const sat = s / 100;
-  const light = l / 100;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = sat * Math.min(light, 1 - light);
-  const channel = (n: number) =>
-    Math.round(
-      255 * (light - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))),
-    );
-  const toHex = (v: number) => v.toString(16).padStart(2, "0");
-  return `#${toHex(channel(0))}${toHex(channel(8))}${toHex(channel(4))}`;
+/** Colors every anonymous color must also stay away from (EY yellow accent). */
+const RESERVED_COLORS: readonly string[] = ["#FFE600"];
+
+/* ------------------------------------------------------------------ */
+/* Color math (OKLab)                                                  */
+
+type Lab = readonly [number, number, number];
+
+function parseHex(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+}
+
+function toLinear(c: number): number {
+  const v = c / 255;
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+}
+
+/** sRGB hex → OKLab (Björn Ottosson). Unparseable input → mid grey. */
+export function hexToOklab(hex: string): Lab {
+  const rgb = parseHex(hex) ?? [128, 128, 128];
+  const [r, g, b] = rgb.map(toLinear);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+/** Perceptual distance ΔE_OK (Euclidean in OKLab; ~0.02 = just noticeable). */
+export function colorDistance(a: string, b: string): number {
+  const A = hexToOklab(a);
+  const B = hexToOklab(b);
+  return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
 }
 
 /**
- * N distinguishable NEUTRAL GREYS. Identity lives in the lightness ramp
- * (L 32% → 68% by configured position); a barely-there ±4 warm/cool hue nudge
- * at ~5% saturation separates neighbouring bars without ever suggesting a team
- * color. At this saturation no grey can read as green/purple/orange/blue/
- * yellow/red. pickTextOn stays AA on the whole ramp (white on the dark end,
- * black on the light end).
+ * Greedy max-min pick of `n` palette colors: each step takes the candidate
+ * whose nearest neighbour among (real team colors ∪ reserved ∪ already
+ * chosen) is the farthest. Deterministic (ties → palette order). Beyond the
+ * palette size the picks cycle (never expected at an event).
  */
-export function anonymousColor(index: number, total: number): string {
-  const n = Math.max(1, total);
-  const t = n === 1 ? 0.5 : index / (n - 1);
-  // Alternate a faintly warm (30°) / faintly cool (222°) cast between
-  // neighbours — imperceptible as color at 5% saturation, just enough to
-  // keep adjacent greys from merging.
-  const hue = index % 2 === 0 ? 222 : 30;
-  const sat = 5; // ~neutral: no appreciable tint
-  const light = 32 + t * 36; // 32-68%: the ramp that makes each bar followable
-  return hslToHex(hue, sat, light);
+export function pickAnonColors(realColors: readonly string[], n: number): string[] {
+  const avoid = [...realColors, ...RESERVED_COLORS];
+  const chosen: string[] = [];
+  const pool = [...ANON_PALETTE];
+  for (let i = 0; i < n; i++) {
+    if (pool.length === 0) {
+      chosen.push(chosen[i % ANON_PALETTE.length]);
+      continue;
+    }
+    let best = 0;
+    let bestScore = -1;
+    pool.forEach((candidate, idx) => {
+      let nearest = Infinity;
+      for (const c of avoid) nearest = Math.min(nearest, colorDistance(candidate, c));
+      for (const c of chosen) nearest = Math.min(nearest, colorDistance(candidate, c));
+      if (nearest > bestScore + 1e-9) {
+        bestScore = nearest;
+        best = idx;
+      }
+    });
+    chosen.push(pool[best]);
+    pool.splice(best, 1);
+  }
+  return chosen;
 }
+
+/* ------------------------------------------------------------------ */
+/* Seed + derangement                                                  */
+
+/** 32-bit FNV-1a hash of a string. */
+function fnv1a(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** Run-scoped seed: stable for a run, different after every relaunch. */
+export function anonSeed(pollId: string, runSeq: number): number {
+  return fnv1a(`${pollId}:${runSeq}`);
+}
+
+/**
+ * Seeded derangement of [0..n): perm[i] !== i for every i (n ≥ 2). Seeded
+ * Fisher–Yates with rejection (expected ~e tries). n = 1 → [0].
+ */
+export function seededDerangement(n: number, seed: number): number[] {
+  const identity = Array.from({ length: n }, (_, i) => i);
+  if (n < 2) return identity;
+  const rng = mulberry32(seed);
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const perm = [...identity];
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    if (perm.every((p, i) => p !== i)) return perm;
+  }
+  // Practically unreachable: fall back to a rotation (always a derangement).
+  return identity.map((i) => (i + 1) % n);
+}
+
+/* ------------------------------------------------------------------ */
+/* Identity map                                                        */
+
+export interface AnonIdentity {
+  name: string;
+  color: string;
+  /** Anonymous slot (index into the picked colors). */
+  slot: number;
+}
+
+/**
+ * Anonymous identity per team id. `teamsInPositionOrder` is the configured
+ * (lobby) order with the REAL colors — the distance targets.
+ */
+export function anonymousIdentity(
+  teamsInPositionOrder: ReadonlyArray<{ id: string; color: string }>,
+  seed: number,
+): Map<string, AnonIdentity> {
+  const n = teamsInPositionOrder.length;
+  const colors = pickAnonColors(
+    teamsInPositionOrder.map((t) => t.color),
+    n,
+  );
+  const perm = seededDerangement(n, seed);
+  return new Map(
+    teamsInPositionOrder.map((t, i) => [
+      t.id,
+      { name: ANONYMOUS_NAME, color: colors[perm[i]], slot: perm[i] },
+    ]),
+  );
+}
+
+/**
+ * Identity map from rows that are ALREADY masked (server wall): reuse their
+ * own name/color so the client matches the server byte for byte.
+ */
+export function identityFromMasked(
+  rows: ReadonlyArray<{ id: string; name: string; color: string }>,
+): Map<string, AnonIdentity> {
+  return new Map(rows.map((r, i) => [r.id, { name: r.name, color: r.color, slot: i }]));
+}
+
+/** Fallback for a row missing from the map (never a real identity). */
+const UNKNOWN_IDENTITY: AnonIdentity = { name: ANONYMOUS_NAME, color: "#94A3B8", slot: -1 };
+
+/**
+ * Rewrite name/color of display rows with their anonymous identity. Generic
+ * over the row shape so the lobby's Team cards and the live RankedTeam rows
+ * mask through the same pure function.
+ */
+export function applyAnonIdentity<T extends { id: string; name: string; color: string }>(
+  rows: T[],
+  identity: ReadonlyMap<string, AnonIdentity>,
+): T[] {
+  return rows.map((row) => {
+    const id = identity.get(row.id) ?? UNKNOWN_IDENTITY;
+    return { ...row, name: id.name, color: id.color };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Chip initials                                                       */
 
 /** "<WORD> <number>" team names, e.g. "AMARILLO 3" / "Equipo 12". */
 const NUMBERED_TEAM = /^(\p{L}+)\s+(\d{1,3})$/u;
@@ -100,44 +252,12 @@ function longInitials(name: string): string {
  *  - otherwise the first letter of the first word; when that letter collides
  *    with another team of the poll, two letters (first word + second word, or
  *    the first two letters of a single word) keep the chips apart.
- * The anonymous empty name yields "" (the chip renders as a plain color dot).
+ * The anonymous name yields "?" (every hidden chip reads the same).
  */
 export function teamInitials(name: string, names: readonly string[]): string {
+  if (name === ANONYMOUS_NAME) return ANONYMOUS_NAME;
   const key = shortInitials(name);
   if (!key) return "";
   const collides = names.some((other) => other !== name && shortInitials(other) === key);
   return collides ? longInitials(name) : key;
-}
-
-/** Stable id → configured-position map from the SSR team snapshot (position order). */
-export function buildPositionIndex(teamsInPositionOrder: Team[]): Map<string, number> {
-  return new Map(teamsInPositionOrder.map((t, i) => [t.id, i]));
-}
-
-/**
- * Rewrite name/color of display rows with stable anonymous identities.
- * Generic over the row shape so both the lobby's Team cards and the live
- * RankedTeam rows anonymize through the same pure function.
- */
-export function anonymizeIdentities<T extends { id: string; name: string; color: string }>(
-  rows: T[],
-  positionById: Map<string, number>,
-): T[] {
-  const total = Math.max(positionById.size, rows.length);
-  return rows.map((row, i) => {
-    const position = positionById.get(row.id) ?? i;
-    return {
-      ...row,
-      name: ANONYMOUS_NAME,
-      color: anonymousColor(position, total),
-    };
-  });
-}
-
-/** Convenience alias with the domain shape most call sites use. */
-export function anonymizeRankedTeams(
-  teams: RankedTeam[],
-  positionById: Map<string, number>,
-): RankedTeam[] {
-  return anonymizeIdentities(teams, positionById);
 }

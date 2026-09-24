@@ -445,6 +445,9 @@ export class LabEngine {
       chartType: settings.chartType,
       showLegend: true,
       anonymousDisplay: settings.anonymous,
+      // Each lab run (Reiniciar / scenario / seed) is a new "launch": it
+      // re-seeds the anonymous shuffle exactly like a relaunch in production.
+      runSeq: this.runId,
       tieRule: settings.tieRule,
       joinCode: scenario.joinCode,
       createdAt: "2026-09-24T17:00:00.000Z",

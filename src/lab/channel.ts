@@ -28,7 +28,12 @@ export type LabMessage =
   /** Control room → projector frame: drive the mascot (force / fire / random). */
   | { type: "mascot-cmd"; cmd: MascotCommand }
   /** Projector frame → control room: line log + live state (overlap detector). */
-  | { type: "mascot"; report: MascotReport };
+  | { type: "mascot"; report: MascotReport }
+  /**
+   * Projector frame → control room: live DOM leak test while open +
+   * anonymous (real names / "Candidato X" labels found in the live stage).
+   */
+  | { type: "anon-dom"; scans: number; leaks: string[] };
 
 export interface LabChannel {
   post(msg: LabMessage): void;

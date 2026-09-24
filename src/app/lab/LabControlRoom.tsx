@@ -14,7 +14,8 @@ import type {
   MascotStateReport,
 } from "@/components/mascot/MascotHost";
 import type { AssistantEventType } from "@/lib/assistant/detectEvents";
-import { runSelfCheck, type SelfCheckReport } from "@/lib/assistant/selfCheck";
+import { runSelfCheck, type SelfCheckItem, type SelfCheckReport } from "@/lib/assistant/selfCheck";
+import { runAnonymousSelfCheck, type AnonTeamSet } from "@/components/screen/anonymizeCheck";
 import type { Phase } from "@/app/vote/[poll]/phase";
 import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
@@ -125,8 +126,11 @@ export function LabControlRoom({
   // Acceptance gate: how many state reports flagged an overlap since reset.
   const [overlapCount, setOverlapCount] = useState(0);
   const [lastOverlap, setLastOverlap] = useState("");
+  const [anonDom, setAnonDom] = useState<{ scans: number; leaks: string[] } | null>(null);
   const onMessage = useCallback((msg: LabMessage) => {
-    if (msg.type === "persona") {
+    if (msg.type === "anon-dom") {
+      setAnonDom({ scans: msg.scans, leaks: msg.leaks });
+    } else if (msg.type === "persona") {
       setPersonaInfo((prev) => ({ ...prev, [msg.id]: { phase: msg.phase, manual: msg.manual } }));
     } else if (msg.type === "keepouts") {
       setKeepouts(msg.count);
@@ -191,6 +195,7 @@ export function LabControlRoom({
             state={mascotState}
             overlapCount={overlapCount}
             lastOverlap={lastOverlap}
+            anonDom={anonDom}
             onReset={() => {
               setMascotLog([]);
               setOverlapCount(0);
@@ -216,6 +221,7 @@ function MascotPanel({
   state,
   overlapCount,
   lastOverlap,
+  anonDom,
   onReset,
 }: {
   controls: LabControls;
@@ -223,12 +229,26 @@ function MascotPanel({
   state: MascotStateReport | null;
   overlapCount: number;
   lastOverlap: string;
+  /** Live DOM leak test from the projector frame (null until an anon open). */
+  anonDom: { scans: number; leaks: string[] } | null;
   onReset: () => void;
 }) {
   const [forced, setForced] = useState<Expression | null>(null);
   const [check, setCheck] = useState<SelfCheckReport | null>(null);
   const send = useCallback((cmd: MascotCommand) => controls.post({ type: "mascot-cmd", cmd }), [controls]);
-  const runCheck = useCallback(() => setCheck(runSelfCheck()), []);
+  const runCheck = useCallback(() => {
+    const base = runSelfCheck();
+    const anon = runAnonymousSelfCheck(ANON_CHECK_SETS);
+    setCheck({ ok: base.ok && anon.every((i) => i.ok), total: base.total, items: [...base.items, ...anon] });
+  }, []);
+  const domItem: SelfCheckItem = anonDom
+    ? {
+        id: "anon-dom",
+        label: "Anónimo: DOM en directo sin nombres",
+        ok: anonDom.leaks.length === 0,
+        detail: anonDom.leaks.length ? `filtra: ${anonDom.leaks.join(", ")}` : `${anonDom.scans} lecturas limpias`,
+      }
+    : { id: "anon-dom", label: "Anónimo: DOM en directo sin nombres", ok: true, detail: "pendiente (activa Anónimo y abre la votación)" };
   // Run once on mount (a few ms, pure).
   useEffect(() => {
     const id = setTimeout(runCheck, 0);
@@ -371,7 +391,7 @@ function MascotPanel({
               )}
             </span>
           </li>
-          {check?.items.map((i) => (
+          {[...(check?.items ?? []), ...(check ? [domItem] : [])].map((i) => (
             <li key={i.id} className="flex items-center gap-2" data-mascot-check={i.id} data-ok={i.ok ? "true" : "false"}>
               <Dot ok={i.ok} />
               <span className={i.ok ? "text-text" : "text-[#FF8A8A]"}>
@@ -384,6 +404,31 @@ function MascotPanel({
     </section>
   );
 }
+
+/**
+ * Team sets the anonymous palette/derangement checks run over: every lab
+ * scenario plus the real event color sets (HACK27 green/purple/orange,
+ * H55CX yellow/blue/purple).
+ */
+const ANON_CHECK_SETS: AnonTeamSet[] = [
+  ...SCENARIOS.map((s) => ({ label: s.id, teams: s.teams })),
+  {
+    label: "hack27",
+    teams: [
+      { id: "h1", name: "Finalista 1", color: "#22C55E" },
+      { id: "h2", name: "Finalista 2", color: "#8B5CF6" },
+      { id: "h3", name: "Finalista 3", color: "#F97316" },
+    ],
+  },
+  {
+    label: "h55cx",
+    teams: [
+      { id: "c1", name: "AMARILLO 1", color: "#FFE600" },
+      { id: "c2", name: "AZUL 2", color: "#4D9FFF" },
+      { id: "c3", name: "MORADO 3", color: "#8b5cf6" },
+    ],
+  },
+];
 
 function Dot({ ok }: { ok: boolean }) {
   return (

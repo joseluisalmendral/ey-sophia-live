@@ -38,11 +38,18 @@ export interface Poll {
   chartType: ChartType;
   showLegend: boolean;
   /**
-   * Presentation-only: when true the projector hides team names/colors during
-   * lobby/countdown/open and reveals identities only in the final reveal.
+   * Presentation-only: when true the projector hides team names/colors while
+   * the vote is OPEN ("?" + a distinct anonymous palette); the lobby shows the
+   * real finalists and the final reveal names them.
    * Voter and admin surfaces always see the real identities.
    */
   anonymousDisplay: boolean;
+  /**
+   * Launch sequence (polls.run_seq; bumps on every relaunch). Seeds the
+   * anonymous identity shuffle on the projector. Optional: surfaces that do
+   * not anonymize (phones, admin) may omit it (treated as 1).
+   */
+  runSeq?: number;
   tieRule: TieRule;
   /** Short, memorable join code shown on the projector. */
   joinCode: string;

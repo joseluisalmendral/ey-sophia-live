@@ -8,6 +8,7 @@ import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { durations, easings } from "@/lib/motion/tokens";
 import { teamInitials } from "./anonymize";
 import { chipRem } from "./broadcast/chipRem";
+import { JoinCode } from "./broadcast/JoinCode";
 import { QrFrame } from "./broadcast/QrFrame";
 import type { Poll, RankedTeam, Team } from "@/lib/types";
 
@@ -15,14 +16,13 @@ import type { Poll, RankedTeam, Team } from "@/lib/types";
  * LobbyStage — the pre-voting projector board (status draft/countdown).
  *
  * LEFT (36%): the QR (encodes the VOTER url) in a glass frame with four yellow
- * viewfinder corners, "Escanea para unirte" in white, and the fallback badge
- * (host + big yellow join code).
+ * viewfinder corners, "Escanea para unirte" in white, and the typed-entry
+ * fallback (JoinCode: "Entra con el código" + the big yellow code — never a
+ * URL on the projector).
  * RIGHT (64%): kicker "VOTACIÓN FINAL" + the poll title (balanced, ≤ 2 lines),
  * the presence counter (mint, one ring ping per join) and the finalists as
- * glass rows — no counters, no numbering. Anonymous runs show ONE card
- * ("{n} finalistas · nombres ocultos hasta el final") + neutral silhouettes;
- * the teams arrive already masked from ScreenStage, this only avoids even
- * hinting at a count per team.
+ * glass rows — no counters, no numbering. Anonymous runs show the REAL
+ * finalists here too: identities hide only while the vote is open.
  * COUNTDOWN: the count-in replaces the finalists as the hero of the right
  * column; in the last 5 s it takes the column over (ring + giant seconds) and
  * the title/presence step aside.
@@ -43,17 +43,6 @@ export interface LobbyStageProps {
   reduced: boolean;
   /** Distinct joins this run (null until the first successful read). */
   joined: number | null;
-  /** Anonymous-display poll: finalists render as one masked card. */
-  anonymous?: boolean;
-}
-
-/** Extract a friendly host hint from the absolute voter URL. */
-function domainHint(voterUrl: string): string {
-  try {
-    return new URL(voterUrl).host;
-  } catch {
-    return "";
-  }
 }
 
 /** "IA Hackathon · Gran final" → two balanced lines, no "·" separators. */
@@ -71,9 +60,7 @@ export const LobbyStage = memo(function LobbyStage({
   opensAt,
   reduced,
   joined,
-  anonymous = false,
 }: LobbyStageProps) {
-  const domain = domainHint(voterUrl);
   // A future opens_at drives the count-in; only during countdown. Mount-time
   // clock read (lazy state keeps render pure); the stage re-mounts on every
   // status flip and CountInTimer owns the live ticking from there on.
@@ -108,26 +95,7 @@ export const LobbyStage = memo(function LobbyStage({
           Escanea para unirte
         </span>
 
-        <div
-          className="glass glass--flat flex flex-col items-center gap-[0.35rem] px-[clamp(1rem,1.6vw,1.8rem)] py-[clamp(0.55rem,1.2vh,0.9rem)]"
-          data-mascot-keepout="code"
-        >
-          <span className="text-proj-label font-semibold leading-none text-text-dim">
-            o entra en{" "}
-            {domain && <span className="font-bold text-text">{domain}</span>}
-          </span>
-          <span className="flex items-baseline gap-[0.6em] leading-none">
-            <span className="font-display text-proj-label font-extrabold uppercase tracking-[0.2em] text-text-dim">
-              código
-            </span>
-            <span
-              className="font-display text-proj-h1 font-black uppercase tracking-[0.12em] text-ey-yellow"
-              style={{ textShadow: "0 0 24px rgb(255 230 0 / 0.35)" }}
-            >
-              {poll.joinCode}
-            </span>
-          </span>
-        </div>
+        <JoinCode code={poll.joinCode} size="hero" reduced={reduced} />
       </div>
 
       {/* RIGHT — programme column + reserved mascot strip (bottom 24%). */}
@@ -185,8 +153,6 @@ export const LobbyStage = memo(function LobbyStage({
             >
               Preparados…
             </motion.span>
-          ) : anonymous ? (
-            <AnonymousFinalists count={cards.length} reduced={reduced} />
           ) : (
             <Finalists cards={cards} reduced={reduced} />
           )}
@@ -293,63 +259,6 @@ function Finalists({
         </motion.li>
       ))}
     </ul>
-  );
-}
-
-function AnonymousFinalists({ count, reduced }: { count: number; reduced: boolean }) {
-  return (
-    <motion.div
-      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: durations.slow, ease: easings.decel, delay: reduced ? 0 : 0.2 }}
-      className="glass glass--flat flex flex-col gap-[clamp(0.9rem,2vh,1.5rem)] px-[clamp(1.2rem,2vw,2.2rem)] py-[clamp(1rem,2.4vh,1.8rem)]"
-      style={{ borderRadius: "1.4rem" }}
-      data-mascot-keepout="finalists"
-    >
-      <div className="flex items-center gap-[0.9rem]">
-        <LockIcon />
-        <span className="flex flex-col gap-[0.35rem]">
-          <span className="font-display text-proj-h2 font-black leading-none text-text">
-            {count} finalistas
-          </span>
-          <span className="font-display text-proj-label font-extrabold uppercase leading-none tracking-[0.16em] text-text-dim">
-            Nombres ocultos hasta el final
-          </span>
-        </span>
-      </div>
-      <div className="flex flex-wrap items-end gap-[clamp(0.8rem,1.6vw,1.6rem)]" aria-hidden>
-        {Array.from({ length: count }, (_, i) => (
-          <Silhouette key={i} />
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-function Silhouette() {
-  return (
-    <svg viewBox="0 0 48 56" className="h-[clamp(3rem,6vh,4.6rem)] w-auto" fill="#5b6075">
-      <circle cx="24" cy="15" r="11" />
-      <path d="M4 56c0-12 9-21 20-21s20 9 20 21z" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-[clamp(1.6rem,2.2vw,2.6rem)] w-auto shrink-0 text-ey-yellow"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="4" y="11" width="16" height="10" rx="2.5" />
-      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-    </svg>
   );
 }
 

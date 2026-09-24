@@ -47,9 +47,12 @@ const CHART_FONT_FAMILY = "Overpass, Inter, ui-sans-serif, system-ui, sans-serif
  * NumberFlow roll, aligned to the pie centre).
  */
 
-/** The donut legend only shows when slice labels do not already name teams. */
-function donutLegendOn(showLegend: boolean, showNames: boolean, hasNames: boolean): boolean {
-  return showLegend && hasNames && !showNames;
+/**
+ * The donut legend only shows when slice labels do not already name teams —
+ * and never on an anonymous run (a legend of "?" entries is just noise).
+ */
+function donutLegendOn(showLegend: boolean, showNames: boolean, anonymized: boolean): boolean {
+  return showLegend && !anonymized && !showNames;
 }
 
 /** Approximate advance of Overpass 800 per character, as a share of the size. */
@@ -92,6 +95,8 @@ export interface ChartViewProps {
   teams: RankedTeam[];
   showLegend: boolean;
   showNames: boolean;
+  /** Open + anonymous: every name is "?" (identities keyed by id, see below). */
+  anonymized?: boolean;
 }
 
 export const ChartView = memo(function ChartView({
@@ -99,6 +104,7 @@ export const ChartView = memo(function ChartView({
   teams,
   showLegend,
   showNames,
+  anonymized = false,
 }: ChartViewProps) {
   // ECharts only takes numeric px font sizes (no CSS clamp/vw), so we scale a
   // 1280px-wide baseline by the real viewport width, clamped to a sane band.
@@ -140,15 +146,17 @@ export const ChartView = memo(function ChartView({
       textStyle: { color: TEXT, fontFamily: CHART_FONT_FAMILY },
     };
 
-    // Anonymous runs mask every name to "": labels/axes then show only the
-    // vote counts (no placeholder, no stray line break, no empty axis slots).
-    const hasNames = teams.some((t) => t.name);
+    // ECharts keys pie slices / categories by NAME: on an anonymous run every
+    // name is "?", which would merge legend entries and categories. Data is
+    // therefore keyed by team id and the display name is looked up for labels.
+    const nameById = new Map(teams.map((t) => [t.id, t.name]));
+    const display = (id: string) => nameById.get(id) ?? "";
 
     if (type === "donut") {
       // Slice labels already carry each name (wrapped, ≤ 2 lines) + its count,
       // so a legend would only repeat them: it shows only when names are off
       // the labels. A legend of nameless entries is just floating dots — skip.
-      const legendOn = donutLegendOn(showLegend, showNames, hasNames);
+      const legendOn = donutLegendOn(showLegend, showNames, anonymized);
       const dense = teams.length >= 5;
       const nameFs = fs(dense ? 20 : 26);
       const countFs = fs(dense ? 30 : 38);
@@ -161,6 +169,7 @@ export const ChartView = memo(function ChartView({
               bottom: 8,
               textStyle: { color: TEXT_DIM, fontSize: fs(24) },
               icon: "circle",
+              formatter: (id: string) => display(id),
             }
           : { show: false },
         series: [
@@ -178,12 +187,14 @@ export const ChartView = memo(function ChartView({
               show: showNames,
               color: TEXT,
               // Rich text: the name wrapped into ≤ 2 lines (never a collision
-              // with a neighbour's label), the count big underneath. An empty
-              // (anonymous) name renders just the count.
+              // with a neighbour's label), the count big underneath. An
+              // anonymous slice reads "?" beside its count (one line).
               formatter: (p: { name: string; value: unknown }) => {
                 const count = `{c|${p.value}}`;
-                if (!p.name) return count;
-                const name = wrapLabel(p.name, nameFs, labelW, 2)
+                const label = display(p.name);
+                if (!label) return count;
+                if (anonymized) return `{q|${label}}  ${count}`;
+                const name = wrapLabel(label, nameFs, labelW, 2)
                   .split("\n")
                   .map((l) => `{n|${l}}`)
                   .join("\n");
@@ -191,6 +202,7 @@ export const ChartView = memo(function ChartView({
               },
               rich: {
                 n: { fontSize: nameFs, lineHeight: Math.round(nameFs * 1.15), fontWeight: 800, color: TEXT },
+                q: { fontSize: countFs, lineHeight: Math.round(countFs * 1.1), fontWeight: 900, color: TEXT_DIM },
                 c: { fontSize: countFs, lineHeight: Math.round(countFs * 1.1), fontWeight: 900, color: TEXT },
               },
             },
@@ -201,7 +213,7 @@ export const ChartView = memo(function ChartView({
               itemStyle: { shadowBlur: 24, shadowColor: "rgba(255,230,0,0.4)" },
             },
             data: teams.map((t) => ({
-              name: t.name,
+              name: t.id,
               value: t.count,
               itemStyle: { color: colorFor(t) },
             })),
@@ -229,11 +241,9 @@ export const ChartView = memo(function ChartView({
       tooltip: { show: false },
       xAxis: {
         type: "category",
-        data: teams.map((t) => t.name),
+        data: teams.map((t) => t.id),
         axisLabel: {
-          // Hide the whole axis label row when names are masked (anonymous):
-          // empty category labels would just reserve ugly blank space.
-          show: showNames && hasNames,
+          show: showNames,
           color: TEXT,
           fontSize: labelPx,
           lineHeight: Math.round(labelPx * 1.12),
@@ -242,7 +252,7 @@ export const ChartView = memo(function ChartView({
           margin: fs(14),
           width: slotW,
           overflow: "none",
-          formatter: (value: string) => wrapLabel(value, labelPx, slotW),
+          formatter: (id: string) => wrapLabel(display(id), labelPx, slotW),
         },
         axisLine: { lineStyle: { color: "rgba(255,255,255,0.12)" } },
         axisTick: { show: false },
@@ -285,10 +295,10 @@ export const ChartView = memo(function ChartView({
         },
       ],
     };
-  }, [type, teams, showLegend, showNames, vwScale, width]);
+  }, [type, teams, showLegend, showNames, anonymized, vwScale, width]);
 
   const total = teams.reduce((s, t) => s + t.count, 0);
-  const legendShown = donutLegendOn(showLegend, showNames, teams.some((t) => t.name));
+  const legendShown = donutLegendOn(showLegend, showNames, anonymized);
 
   return (
     <div ref={wrapRef} className="relative h-full w-full min-h-0">

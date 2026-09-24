@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { MascotHost, type MascotConfig } from "@/components/mascot/MascotHost";
 import { useLiveTally } from "@/lib/realtime/useLiveTally";
@@ -32,6 +34,8 @@ export interface ScreenClientProps {
   teams: Team[];
   /** Absolute URL the on-screen QR encodes — the VOTER url /vote/<join_code>. */
   voterUrl: string;
+  /** `teams` already carry the run's anonymous identities (server wall). */
+  teamsMasked?: boolean;
 }
 
 /** SSR baseline for the mascot config, from the poll row already loaded
@@ -45,7 +49,8 @@ function ssrAssistantConfig(poll: Poll): MascotConfig {
   };
 }
 
-export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
+export function ScreenClient({ poll, teams, voterUrl, teamsMasked = false }: ScreenClientProps) {
+  const router = useRouter();
   const reduced = useReducedMotionPref();
   // Live Control's Broqui switch (and the config form's min/max) must reach
   // the projector without a reload and without a new realtime subscription —
@@ -82,6 +87,18 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
   // Forward-only; the realtime `status` broadcast remains the authority.
   const status = useLocalStatusFlip(baseStatus, opensAt, closesAt);
 
+  // RELAUNCH (closed -> draft observed live): re-render the server snapshot
+  // once so the next run starts from fresh props — the new run_seq re-seeds
+  // the anonymous identities (a relaunch must never reuse the colors the room
+  // just saw revealed) and the teams come back unmasked for the lobby. One
+  // RSC request per relaunch, projector only.
+  const prevStatus = useRef(status);
+  useEffect(() => {
+    const prev = prevStatus.current;
+    prevStatus.current = status;
+    if (prev === "closed" && status === "draft") router.refresh();
+  }, [status, router]);
+
   // Lobby join feed (HTTP polling): runs only while the lobby is on screen —
   // the same lifetime it had when LobbyStage owned it (no teams = no lobby).
   const lobbyOnScreen =
@@ -92,6 +109,7 @@ export function ScreenClient({ poll, teams, voterUrl }: ScreenClientProps) {
     <ScreenStage
       poll={poll}
       teams={teams}
+      teamsMasked={teamsMasked}
       liveTeams={live.teams}
       voterUrl={voterUrl}
       status={status}

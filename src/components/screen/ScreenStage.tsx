@@ -14,9 +14,10 @@ import type {
   Team,
 } from "@/lib/types";
 import {
-  anonymizeIdentities,
-  anonymizeRankedTeams,
-  buildPositionIndex,
+  anonSeed,
+  anonymousIdentity,
+  applyAnonIdentity,
+  identityFromMasked,
 } from "./anonymize";
 import { BarRace } from "./BarRace";
 import { ChartView } from "./ChartView";
@@ -24,6 +25,7 @@ import { LobbyStage } from "./LobbyStage";
 import { RevealStage } from "./RevealStage";
 import { ScreenStageProvider, type RevealBeat, type ScreenStageFrame } from "./ScreenStageContext";
 import { BeamStinger, type StingerVariant } from "./broadcast/BeamStinger";
+import { JoinCode } from "./broadcast/JoinCode";
 import { LiveBug } from "./broadcast/LiveBug";
 import { LowerThird } from "./broadcast/LowerThird";
 import { QrFrame } from "./broadcast/QrFrame";
@@ -43,18 +45,16 @@ import { Sep } from "./broadcast/Sep";
  *   closed             -> RevealStage (3-beat suspense -> podium -> fireworks)
  *
  * ANONYMOUS DISPLAY (presentation-only): identities hide ONLY while the vote is
- * OPEN. The lobby (draft/countdown) shows the REAL teams — the room must see
- * their team is in before voting starts — and the reveal (closed) always
- * receives the REAL teams. During open, rows rewrite to identical EMPTY labels
- * with neutral grey shades keyed on the CONFIGURED team position (never the
- * ranking, which would re-identify teams as bars swap). This keys off the
- * DERIVED `status` the container passes (local flip included), so a
- * countdown→open local flip masks at the exact moment the poll opens, before
- * any broadcast lands. Masking happens here, upstream of every chart, so both
- * production and /lab render through the same wall.
- *
- * LOBBY on anonymous runs (E6): the finalists render as ONE masked card, so the
- * lobby receives masked identities too (names never reach it).
+ * OPEN. The lobby (draft/countdown) shows the REAL finalists — the room must
+ * see their team is in before voting starts — and the reveal (closed) always
+ * receives the REAL teams. During open, every row reads "?" and paints with
+ * its run-seeded anonymous color (see anonymize.ts: distinct palette far from
+ * every real color, deranged against the lobby order, seed = pollId+runSeq,
+ * the same identities the server wall ships). This keys off the DERIVED
+ * `status` the container passes (local flip included), so a countdown→open
+ * local flip masks at the exact moment the poll opens, before any broadcast
+ * lands. Masking happens here, upstream of every chart, so both production
+ * and /lab render through the same wall.
  *
  * BROADCAST GRAMMAR (E6): the header carries the live bug; lobby/count-in →
  * live and live → reveal are stitched by the EY-beam stinger (count-in → live
@@ -86,6 +86,12 @@ export interface ScreenStageProps {
   poll: Poll;
   /** Configured teams (SSR snapshot); the authority for the "no teams" guard. */
   teams: Team[];
+  /**
+   * `teams` already carry the anonymous identities (server wall: the page was
+   * loaded while open + anonymous). They are then reused as-is, so server and
+   * client agree byte for byte.
+   */
+  teamsMasked?: boolean;
   /** Live ranked teams (real identities; masked here while anonymous + open). */
   liveTeams: RankedTeam[];
   /** Absolute URL the on-screen QR encodes — the VOTER url /vote/<join_code>. */
@@ -110,6 +116,7 @@ export interface ScreenStageProps {
 export function ScreenStage({
   poll,
   teams,
+  teamsMasked = false,
   liveTeams,
   voterUrl,
   status,
@@ -127,26 +134,20 @@ export function ScreenStage({
   // so the mascot slot can hide itself during the curtain + camera cuts.
   const [revealBeat, setRevealBeat] = useState<RevealBeat | null>(null);
 
-  const positionById = useMemo(() => buildPositionIndex(teams), [teams]);
+  // Run-scoped anonymous identities keyed by team id (realtime tallies map
+  // through the same ids). Computed from the configured (lobby) order.
+  const runSeq = poll.runSeq ?? 1;
+  const identity = useMemo(
+    () =>
+      teamsMasked
+        ? identityFromMasked(teams)
+        : anonymousIdentity(teams, anonSeed(poll.id, runSeq)),
+    [teamsMasked, teams, poll.id, runSeq],
+  );
   const anonymized = poll.anonymousDisplay && status === "open";
   const displayLiveTeams = useMemo(
-    () =>
-      anonymized ? anonymizeRankedTeams(liveTeams, positionById) : liveTeams,
-    [anonymized, liveTeams, positionById],
-  );
-  const displayTeams = useMemo(
-    () => (anonymized ? anonymizeIdentities(teams, positionById) : teams),
-    [anonymized, teams, positionById],
-  );
-  // Lobby of an anonymous run: masked as well (the lobby shows one card).
-  const lobbyAnon = poll.anonymousDisplay && (status === "draft" || status === "countdown");
-  const lobbyTeams = useMemo(
-    () => (lobbyAnon ? anonymizeIdentities(teams, positionById) : displayTeams),
-    [lobbyAnon, teams, positionById, displayTeams],
-  );
-  const lobbyLiveTeams = useMemo(
-    () => (lobbyAnon ? anonymizeRankedTeams(liveTeams, positionById) : displayLiveTeams),
-    [lobbyAnon, liveTeams, positionById, displayLiveTeams],
+    () => (anonymized ? applyAnonIdentity(liveTeams, identity) : liveTeams),
+    [anonymized, liveTeams, identity],
   );
   const totalVotes = useMemo(
     () => displayLiveTeams.reduce((s, t) => s + t.count, 0),
@@ -259,12 +260,11 @@ export function ScreenStage({
           <div className="relative flex min-h-0 flex-1 flex-col">
             <AnimatePresence mode="wait">
               {(status === "draft" || status === "countdown") && (
-                <StageWrap key="lobby" reduced={reduced}>
+                <StageWrap key="lobby" stage="lobby" reduced={reduced}>
                   <LobbyStage
                     poll={poll}
-                    teams={lobbyTeams}
-                    liveTeams={lobbyLiveTeams}
-                    anonymous={poll.anonymousDisplay}
+                    teams={teams}
+                    liveTeams={liveTeams}
                     voterUrl={voterUrl}
                     isCountdown={status === "countdown"}
                     opensAt={opensAt}
@@ -275,7 +275,7 @@ export function ScreenStage({
               )}
 
               {status === "open" && (
-                <StageWrap key="live" reduced={reduced}>
+                <StageWrap key="live" stage="live" reduced={reduced}>
                   <LiveStage
                     poll={poll}
                     voterUrl={voterUrl}
@@ -336,9 +336,12 @@ export function ScreenStage({
 
 function StageWrap({
   children,
+  stage,
   reduced,
 }: {
   children: ReactNode;
+  /** QA hook (data-stage): lets /lab scan exactly one stage's DOM. */
+  stage: "lobby" | "live";
   reduced: boolean;
 }) {
   return (
@@ -348,6 +351,7 @@ function StageWrap({
       exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }}
       transition={{ duration: durations.base, ease: easings.standard }}
       className="absolute inset-0 flex flex-col"
+      data-stage={stage}
     >
       {children}
     </motion.div>
@@ -394,21 +398,7 @@ const LiveStage = memo(function LiveStage({
         <div data-mascot-keepout="qr" className="flex w-full justify-center">
           <QrFrame value={voterUrl} className="w-[min(13vw,25vh)]" />
         </div>
-        <div
-          className="glass glass--flat flex items-baseline gap-[0.6em] px-[1em] py-[0.5em] leading-none"
-          style={{ borderRadius: "1rem" }}
-          data-mascot-keepout="code"
-        >
-          <span className="font-display text-proj-label font-extrabold uppercase tracking-[0.18em] text-text-dim">
-            código
-          </span>
-          <span
-            className="font-display text-proj-h2 font-black uppercase tracking-[0.12em] text-ey-yellow"
-            style={{ textShadow: "0 0 20px rgb(255 230 0 / 0.3)" }}
-          >
-            {poll.joinCode}
-          </span>
-        </div>
+        <JoinCode code={poll.joinCode} size="rail" reduced={reduced} />
         {/* Prominent close countdown when a duration was configured. Pulses < 10s
             (handled inside CountdownTimer). Server-authoritative from closesAt. */}
         {closesAt && (
@@ -484,7 +474,7 @@ const LiveStage = memo(function LiveStage({
           </motion.div>
         )}
         {isDivRace ? (
-          <BarRace teams={liveTeams} showNames={showNames} reduced={reduced} />
+          <BarRace teams={liveTeams} showNames={showNames} reduced={reduced} anonymized={anonymized} />
         ) : (
           <div className="h-full min-h-0 w-full" data-mascot-keepout="chart">
             <ChartView
@@ -492,6 +482,7 @@ const LiveStage = memo(function LiveStage({
               teams={liveTeams}
               showLegend={poll.showLegend}
               showNames={showNames}
+              anonymized={anonymized}
             />
           </div>
         )}
@@ -504,7 +495,7 @@ const LiveStage = memo(function LiveStage({
         <LowerThird
           kicker="En directo"
           title="¡Votación abierta!"
-          body="Elige equipo y mantén pulsado"
+          body="Elige equipo y vota desde tu móvil"
           reduced={reduced}
           delayMs={reduced ? 300 : 1000}
           className="absolute bottom-[clamp(0.5rem,1.4vh,1.2rem)] left-[clamp(1.25rem,3vw,3rem)] z-20"

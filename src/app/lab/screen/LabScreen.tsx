@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MascotBoundary } from "@/components/mascot/MascotBoundary";
 import { MascotHost, type MascotCommand, type MascotLabBridge } from "@/components/mascot/MascotHost";
 import { ScreenStage } from "@/components/screen/ScreenStage";
@@ -112,11 +112,23 @@ function LabScreenStage({
     return () => clearInterval(id);
   }, [showKeepouts, post]);
 
+  const anonDom = useAnonDomScan(
+    snap.status === "open" && poll.anonymousDisplay,
+    teams.map((t) => t.name),
+    post,
+  );
+
   return (
     <LabSettingsProvider value={frame}>
       {showKeepouts && <style>{KEEPOUT_CSS}</style>}
       {/* QA hook: virtual time + status for scripted screenshots. */}
-      <span hidden data-lab-t={snap.t.toFixed(2)} data-lab-status={snap.status} />
+      <span
+        hidden
+        data-lab-t={snap.t.toFixed(2)}
+        data-lab-status={snap.status}
+        data-lab-anon-scans={anonDom.scans}
+        data-lab-anon-leaks={anonDom.leaks.join("|")}
+      />
       <ScreenStage
         poll={poll}
         teams={teams}
@@ -146,6 +158,57 @@ function LabScreenStage({
       />
     </LabSettingsProvider>
   );
+}
+
+/** "Candidato A"-style letter labels: never allowed on a hidden identity. */
+const LETTER_LABEL = /\b[Cc]andidat[oa]s?\b|\b[Ee]quipo [A-Z]\b/;
+
+/**
+ * Live DOM leak test (open + anonymous): every 500 ms read the LIVE stage
+ * and the mascot host — visible text AND aria-labels — and flag any real team
+ * name or letter label. Scoped to [data-stage="live"] so the lobby fading out
+ * under the stinger (it legitimately shows the real finalists) never counts.
+ * Reports to the control room and on a hidden QA span.
+ */
+function useAnonDomScan(
+  active: boolean,
+  realNames: string[],
+  post: (msg: LabMessage) => void,
+): { scans: number; leaks: string[] } {
+  const [result, setResult] = useState<{ scans: number; leaks: string[] }>({ scans: 0, leaks: [] });
+  const namesKey = realNames.join("\u0001");
+  useEffect(() => {
+    if (!active) return;
+    const names = namesKey.split("\u0001").filter((n) => n.trim().length > 1);
+    let scans = 0;
+    const leaks = new Set<string>();
+    const scan = () => {
+      const roots = [
+        ...document.querySelectorAll<HTMLElement>('[data-stage="live"], [data-mascot-host]'),
+      ];
+      if (roots.length === 0) return;
+      const texts: string[] = [];
+      for (const r of roots) {
+        texts.push(r.innerText);
+        r.querySelectorAll("[aria-label]").forEach((el) => texts.push(el.getAttribute("aria-label") ?? ""));
+      }
+      const blob = texts.join("\n").toLowerCase();
+      for (const n of names) if (blob.includes(n.toLowerCase())) leaks.add(n);
+      const letter = LETTER_LABEL.exec(texts.join("\n"));
+      if (letter) leaks.add(letter[0]);
+      scans += 1;
+      const next = { scans, leaks: [...leaks] };
+      setResult(next);
+      post({ type: "anon-dom", ...next });
+    };
+    const id = setInterval(scan, 500);
+    const first = setTimeout(scan, 50);
+    return () => {
+      clearInterval(id);
+      clearTimeout(first);
+    };
+  }, [active, namesKey, post]);
+  return result;
 }
 
 export function LabWaiting() {

@@ -83,6 +83,7 @@ export default async function TvChannelPage({
           poll={data.poll}
           teams={data.teams}
           voterUrl={data.voterUrl}
+          teamsMasked={data.teamsMasked}
         />
       ) : (
         <ChannelStandby slug={channel.slug} />

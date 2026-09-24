@@ -30,6 +30,10 @@ import type { RankedTeam } from "@/lib/types";
  * The team name lives on its own layer above the fill (not inside it), so the
  * scaled fill never distorts the type.
  *
+ * Anonymous runs (open + anonymous_display): rows arrive already masked
+ * ("?" + a distinct anonymous color). A dark "?" badge ringed in that color
+ * IS the row label (no second "?" beside it); the fill carries the color.
+ *
  * Reduced motion: layout reorders still apply but the global CSS collapses
  * them; the fill uses a short tween instead of a spring; no medal pop.
  */
@@ -40,6 +44,8 @@ export interface BarRaceProps {
   reduced: boolean;
   /** Dim + desaturate for the reveal freeze beat. */
   frozen?: boolean;
+  /** Rows are masked ("?"): the chip is the only label. */
+  anonymized?: boolean;
 }
 
 const MEDAL: Record<number, { bg: string; ink: string; glow: string }> = {
@@ -53,6 +59,7 @@ export const BarRace = memo(function BarRace({
   showNames,
   reduced,
   frozen = false,
+  anonymized = false,
 }: BarRaceProps) {
   const counts = teams.map((t) => t.count);
   const names = teams.map((t) => t.name);
@@ -113,16 +120,35 @@ export const BarRace = memo(function BarRace({
                     boxShadow: isLeader ? "var(--shadow-glow-win)" : undefined,
                   }}
                 />
-                {/* Identity layer: on anonymous runs the name is empty, the
-                    chip collapses to a plain grey dot and no label renders. */}
+                {/* Identity layer: on anonymous runs a "?" mystery badge and
+                    no separate name. */}
                 <span className="relative z-[1] flex h-full min-w-0 items-center gap-[clamp(0.5rem,0.9vw,0.9rem)] pl-[clamp(0.7rem,1.2vw,1.2rem)] pr-3">
-                  <TeamColorChip
-                    color={team.color}
-                    label={teamInitials(team.name, names) || undefined}
-                    size={dense ? 30 : 36}
-                    style={chipRem(dense ? 1.875 : 2.25, teamInitials(team.name, names))}
-                  />
-                  {showNames && team.name && (
+                  {anonymized ? (
+                    // Mystery badge: a dark disc ringed in the anonymous color
+                    // with a white "?" — reads on ANY fill (a same-color chip
+                    // would vanish on the leader's full-color bar).
+                    <span
+                      aria-hidden
+                      className="flex shrink-0 items-center justify-center rounded-full font-display font-black leading-none text-text"
+                      style={{
+                        width: dense ? "2.25rem" : "2.75rem",
+                        height: dense ? "2.25rem" : "2.75rem",
+                        fontSize: dense ? "1.35rem" : "1.65rem",
+                        background: "rgb(8 12 30 / 0.62)",
+                        boxShadow: `inset 0 0 0 0.16rem ${team.color}, 0 2px 10px rgb(0 0 0 / 0.35)`,
+                      }}
+                    >
+                      {team.name}
+                    </span>
+                  ) : (
+                    <TeamColorChip
+                      color={team.color}
+                      label={teamInitials(team.name, names) || undefined}
+                      size={dense ? 30 : 36}
+                      style={chipRem(dense ? 1.875 : 2.25, teamInitials(team.name, names))}
+                    />
+                  )}
+                  {showNames && !anonymized && team.name && (
                     <span
                       className={[
                         "min-w-0 truncate font-display font-extrabold leading-tight",
@@ -164,7 +190,11 @@ export const BarRace = memo(function BarRace({
                 >
                   <CountUp
                     value={team.count}
-                    aria-label={team.name ? `${team.name}: ${team.count} votos` : `${team.count} votos`}
+                    aria-label={
+                      anonymized || !team.name
+                        ? `${team.count} votos`
+                        : `${team.name}: ${team.count} votos`
+                    }
                   />
                 </span>
                 {!dense && team.percentage !== null && (

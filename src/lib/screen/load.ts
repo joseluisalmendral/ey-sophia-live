@@ -1,8 +1,9 @@
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import {
-  anonymizeIdentities,
-  buildPositionIndex,
+  anonSeed,
+  anonymousIdentity,
+  applyAnonIdentity,
 } from "@/components/screen/anonymize";
 import { INTERVAL_DEFAULTS } from "@/lib/assistant/scheduler";
 import type { Poll, PollStatus, Team } from "@/lib/types";
@@ -39,13 +40,14 @@ interface PollRow {
   tie_rule: Poll["tieRule"];
   join_code: string;
   created_at: string;
+  run_seq?: number | null;
   assistant_enabled?: boolean | null;
   assistant_min_interval_s?: number | null;
   assistant_max_interval_s?: number | null;
 }
 
 const POLL_COLUMNS =
-  "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at";
+  "id, title, status, opens_at, closes_at, duration_seconds, chart_type, show_legend, anonymous_display, tie_rule, join_code, created_at, run_seq";
 /** WP4 assistant settings — selected separately so a pre-migration DB (missing
  * these columns) can fall back to {enabled:true,14,28} instead of failing. */
 const ASSISTANT_COLUMNS =
@@ -69,6 +71,7 @@ function mapPoll(r: PollRow): Poll {
     chartType: r.chart_type,
     showLegend: r.show_legend,
     anonymousDisplay: r.anonymous_display,
+    runSeq: r.run_seq ?? 1,
     tieRule: r.tie_rule,
     joinCode: r.join_code,
     createdAt: r.created_at,
@@ -98,6 +101,8 @@ export interface ScreenData {
   teams: Team[];
   /** Absolute VOTER url the on-screen QR encodes. */
   voterUrl: string;
+  /** True when `teams` already carry the anonymous identities (open + anonymous). */
+  teamsMasked: boolean;
 }
 
 /**
@@ -137,8 +142,8 @@ export async function loadScreenData(
     .from("teams")
     .select("id, poll_id, name, color, position")
     .eq("poll_id", poll.id)
-    // Stable configured order: the anonymous-display mapping ("Equipo A/B/…")
-    // is keyed off this order, so it must be team position, never insertion.
+    // Stable configured order: the anonymous derangement is defined relative
+    // to this (lobby) order, so it must be team position, never insertion.
     .order("position", { ascending: true });
 
   let teams: Team[] = (teamRows ?? []).map((t: TeamRow) => ({
@@ -153,14 +158,20 @@ export async function loadScreenData(
   // HTML source even if the render masks them. Identities hide ONLY while the
   // vote is OPEN — the lobby (draft/countdown) deliberately shows the real
   // teams so the room can confirm theirs is in — so the snapshot ships
-  // anonymized only for `open`. The reveal never needs these rows — it renders
-  // the runtime get_results data (real names), fetched after the close.
+  // anonymized only for `open`, with the SAME run-seeded identities
+  // ("?" + distinct palette + shuffled slots) the client computes, and
+  // `teamsMasked` tells ScreenStage to reuse them as-is. The reveal never
+  // needs these rows — it renders the runtime get_results data (real names),
+  // fetched after the close.
+  let teamsMasked = false;
   if (poll.anonymousDisplay && poll.status === "open") {
-    teams = anonymizeIdentities(teams, buildPositionIndex(teams));
+    const identity = anonymousIdentity(teams, anonSeed(poll.id, poll.runSeq ?? 1));
+    teams = applyAnonIdentity(teams, identity);
+    teamsMasked = true;
   }
 
   const origin = await resolveOrigin();
   const voterUrl = `${origin}/vote/${poll.joinCode}`;
 
-  return { poll, teams, voterUrl };
+  return { poll, teams, voterUrl, teamsMasked };
 }

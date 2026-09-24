@@ -49,6 +49,7 @@ export default async function ScreenPage({
       poll={data.poll}
       teams={data.teams}
       voterUrl={data.voterUrl}
+      teamsMasked={data.teamsMasked}
     />
   );
 }

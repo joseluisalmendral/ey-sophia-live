@@ -6,7 +6,7 @@
  */
 
 import { LINES, type Line, type LineCategory } from "./lines.es";
-import { hasNamePlaceholder, MAX_LINE_CHARS, pickLine, resolveLine, type LineContext } from "./resolveLine";
+import { ANON_LABEL_WORDS, hasNamePlaceholder, MAX_LINE_CHARS, pickLine, resolveLine, type LineContext } from "./resolveLine";
 import { mulberry32 } from "./rng";
 import { INTERVAL_FLOOR_S, MIN_GAP_MS, sanitizeInterval, Scheduler, validateInterval } from "./scheduler";
 
@@ -164,6 +164,7 @@ export function runSelfCheck(pool: readonly Line[] = LINES): SelfCheckReport {
       const leak = containsFixture(r.text);
       if (leak) errors.push(`${l.id}: filtra "${leak}"`);
       if (COLOR_WORDS.test(r.text)) errors.push(`${l.id}: color`);
+      if (ANON_LABEL_WORDS.test(r.text)) errors.push(`${l.id}: etiqueta anónima`);
     }
     // Random draws through the real picker, every projector category.
     const rng = mulberry32(2027);
@@ -175,11 +176,12 @@ export function runSelfCheck(pool: readonly Line[] = LINES): SelfCheckReport {
         draws++;
         const leak = containsFixture(r.text);
         if (leak) errors.push(`${c}/${r.id}: filtra "${leak}"`);
+        if (ANON_LABEL_WORDS.test(r.text)) errors.push(`${c}/${r.id}: etiqueta anónima`);
         const src = pool.find((l) => l.id === r.id);
         if (src && !src.anonSafe) errors.push(`${c}/${r.id}: no-anonSafe elegida`);
       }
     }
-    push("anon", "Modo anónimo sin nombres ni colores", errors, `${safeCount} líneas anonSafe · ${draws} sorteos limpios`);
+    push("anon", "Modo anónimo sin nombres, colores ni letras", errors, `${safeCount} líneas anonSafe · ${draws} sorteos limpios`);
   }
 
   /* 4. Named mode resolves names */

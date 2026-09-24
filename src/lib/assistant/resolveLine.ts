@@ -61,8 +61,16 @@ function valueFor(key: string, ctx: LineContext): string | null {
  * context: forbidden name in anonymous mode, a placeholder with no value
  * (e.g. {second} with a single team, {gap} of 0), or > 90 chars.
  */
+/**
+ * Anonymous labels a hidden-identity line must never carry: "Candidato A",
+ * "Equipo B"… — a letter per team would let the room map labels to bars.
+ * (Case-sensitive capital letter, so "cada equipo a su ritmo" is fine.)
+ */
+export const ANON_LABEL_WORDS = /\b[Cc]andidat[oa]s?\b|\b[Ee]quipo [A-Z]\b/;
+
 export function resolveLine(line: Line, ctx: LineContext): ResolvedLine | null {
   if (ctx.anonymized && (!line.anonSafe || hasNamePlaceholder(line.text))) return null;
+  if (ctx.anonymized && ANON_LABEL_WORDS.test(line.text)) return null;
   let missing = false;
   const text = line.text.replace(/\{([a-zA-Z]+)\}/g, (_, key: string) => {
     if (key === "gap" && (ctx.gap ?? 0) < 1) missing = true;
