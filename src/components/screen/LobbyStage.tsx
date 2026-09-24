@@ -6,7 +6,7 @@ import { CountInTimer, type CountInPhase } from "@/components/atoms/CountInTimer
 import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { durations, easings } from "@/lib/motion/tokens";
-import { teamInitial } from "./anonymize";
+import { teamInitials } from "./anonymize";
 import { chipRem } from "./broadcast/chipRem";
 import { QrFrame } from "./broadcast/QrFrame";
 import type { Poll, RankedTeam, Team } from "@/lib/types";
@@ -259,6 +259,7 @@ function Finalists({
   reduced: boolean;
 }) {
   const dense = cards.length >= 5;
+  const names = cards.map((c) => c.name);
   return (
     <ul
       className={[
@@ -280,7 +281,7 @@ function Finalists({
           style={{ borderRadius: "1.1rem" }}
         >
           <span aria-hidden className="h-[70%] w-1.5 shrink-0 self-center rounded-full" style={{ backgroundColor: team.color }} />
-          <TeamColorChip color={team.color} label={teamInitial(team.name)} size={dense ? 44 : 52} style={chipRem(dense ? 2.75 : 3.25)} />
+          <TeamColorChip color={team.color} label={teamInitials(team.name, names)} size={dense ? 44 : 52} style={chipRem(dense ? 2.75 : 3.25, teamInitials(team.name, names))} />
           <span
             className={[
               "min-w-0 flex-1 truncate font-display font-extrabold leading-tight text-text",

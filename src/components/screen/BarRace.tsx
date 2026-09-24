@@ -8,7 +8,7 @@ import { springs } from "@/lib/motion/tokens";
 import { pickTextOn } from "@/lib/utils/contrast";
 import { chipRem } from "./broadcast/chipRem";
 import { adaptiveBarWidthPct } from "./chartScale";
-import { teamInitial } from "./anonymize";
+import { teamInitials } from "./anonymize";
 import type { RankedTeam } from "@/lib/types";
 
 /**
@@ -55,6 +55,7 @@ export const BarRace = memo(function BarRace({
   frozen = false,
 }: BarRaceProps) {
   const counts = teams.map((t) => t.count);
+  const names = teams.map((t) => t.name);
   const leaderCount = counts.length ? Math.max(...counts) : 0;
   const trailerCount = counts.length ? Math.min(...counts) : 0;
   const totalCount = counts.reduce((s, c) => s + c, 0);
@@ -117,9 +118,9 @@ export const BarRace = memo(function BarRace({
                 <span className="relative z-[1] flex h-full min-w-0 items-center gap-[clamp(0.5rem,0.9vw,0.9rem)] pl-[clamp(0.7rem,1.2vw,1.2rem)] pr-3">
                   <TeamColorChip
                     color={team.color}
-                    label={teamInitial(team.name) || undefined}
+                    label={teamInitials(team.name, names) || undefined}
                     size={dense ? 30 : 36}
-                    style={chipRem(dense ? 1.875 : 2.25)}
+                    style={chipRem(dense ? 1.875 : 2.25, teamInitials(team.name, names))}
                   />
                   {showNames && team.name && (
                     <span

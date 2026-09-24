@@ -32,7 +32,7 @@ import type { RankedTeam, Team } from "@/lib/types";
 /**
  * The single masked label: the EMPTY string. All hidden teams share it on
  * purpose — any per-team label (letters, numbers, even "???") invites the room
- * to map labels to teams. teamInitial("") yields "" so the chips collapse to a
+ * to map labels to teams. teamInitials("") yields "" so the chips collapse to a
  * plain grey dot too.
  */
 export const ANONYMOUS_NAME = "";
@@ -71,16 +71,42 @@ export function anonymousColor(index: number, total: number): string {
   return hslToHex(hue, sat, light);
 }
 
+/** "<WORD> <number>" team names, e.g. "AMARILLO 3" / "Equipo 12". */
+const NUMBERED_TEAM = /^(\p{L}+)\s+(\d{1,3})$/u;
+
+/** One-letter key (or letter + number for numbered teams). */
+function shortInitials(name: string): string {
+  const n = name.trim();
+  if (!n) return "";
+  const m = NUMBERED_TEAM.exec(n);
+  if (m) return `${m[1].charAt(0)}${m[2]}`.toUpperCase();
+  return n.charAt(0).toUpperCase();
+}
+
+/** Two-letter key: first letters of the first two words, or of a single word. */
+function longInitials(name: string): string {
+  const n = name.trim();
+  if (NUMBERED_TEAM.test(n)) return shortInitials(n);
+  const words = n.split(/\s+/);
+  const second = words[1] ? words[1].charAt(0) : n.charAt(1);
+  return `${n.charAt(0)}${second}`.toUpperCase();
+}
+
 /**
- * Chip initial for a team name: first char of the LAST word, so "Equipo Rojo"
- * reads "R" instead of every chip collapsing to "E". Single-word names keep
- * their first char; the anonymous empty name yields "" (chip renders as a
- * plain color dot).
+ * Chip initials for a team, shared by the lobby, the live race and the
+ * podium so a team reads the same everywhere:
+ *  - "<WORD> <number>" ("AMARILLO 3") → first letter + number ("A3"), never
+ *    the bare digit;
+ *  - otherwise the first letter of the first word; when that letter collides
+ *    with another team of the poll, two letters (first word + second word, or
+ *    the first two letters of a single word) keep the chips apart.
+ * The anonymous empty name yields "" (the chip renders as a plain color dot).
  */
-export function teamInitial(name: string): string {
-  const words = name.trim().split(/\s+/);
-  const source = words[words.length - 1] || name;
-  return source.charAt(0).toUpperCase();
+export function teamInitials(name: string, names: readonly string[]): string {
+  const key = shortInitials(name);
+  if (!key) return "";
+  const collides = names.some((other) => other !== name && shortInitials(other) === key);
+  return collides ? longInitials(name) : key;
 }
 
 /** Stable id → configured-position map from the SSR team snapshot (position order). */
