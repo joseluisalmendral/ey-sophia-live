@@ -1,0 +1,159 @@
+/*
+ * Broqui — life layer (float / sway / breathe / glow / halo) as CSS keyframes
+ * on the compositor. Everything here is transform + opacity only; the periods
+ * are deliberately incommensurate (3600 / 5200 / 3800 / 40000 ms) so the idle
+ * never reads as a mechanical loop.
+ *
+ * Only `.broqui-root` is promoted with will-change (motion spec §E).
+ * `--broqui-float` is a registered custom property so a pose can shrink the
+ * float amplitude (sad = 50%) with a smooth transition instead of a jump.
+ */
+
+@property --broqui-float {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 6px;
+}
+
+.broqui-root {
+  position: relative;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+  transition: --broqui-float 600ms ease-out;
+}
+
+.broqui-tier {
+  position: absolute;
+  inset: 0;
+}
+
+.broqui-float {
+  animation: broqui-float 3600ms ease-in-out infinite;
+}
+
+.broqui-sway {
+  transform-origin: 50% 76.2%; /* bottom apex (259 / 340) */
+  animation: broqui-sway 5200ms ease-in-out infinite;
+}
+
+.broqui-squash {
+  transform-origin: 50% 76.2%;
+}
+
+.broqui-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 76.2%;
+  animation: broqui-breathe 3800ms ease-in-out infinite;
+}
+
+.broqui-halo {
+  transform-origin: 50% 44.1%; /* body centre (150 / 340) */
+  animation: broqui-halo 40000ms linear infinite;
+}
+
+.broqui-glow-wrap {
+  position: absolute;
+  left: 0;
+  top: -2.9%; /* centre the 100%-wide disc on C=(160,150) */
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+}
+
+.broqui-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgb(95 242 196 / 0.3) 0%,
+    rgb(63 217 179 / 0.16) 30%,
+    rgb(31 163 147 / 0.05) 62%,
+    transparent 72%
+  );
+  animation: broqui-glow 3800ms ease-in-out -950ms infinite;
+}
+
+.broqui-shadow {
+  position: absolute;
+  left: 50%;
+  top: 88.2%; /* y = 300 / 340 */
+  width: 44%;
+  height: 6%;
+  margin-left: -22%;
+  margin-top: -3%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    rgb(0 0 0 / 0.45) 0%,
+    rgb(0 0 0 / 0.2) 45%,
+    transparent 72%
+  );
+}
+
+@keyframes broqui-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(var(--broqui-float) * -1));
+  }
+}
+
+@keyframes broqui-sway {
+  0%,
+  100% {
+    transform: rotate(-1.2deg);
+  }
+  50% {
+    transform: rotate(1.2deg);
+  }
+}
+
+@keyframes broqui-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(0.992, 1.018);
+  }
+}
+
+@keyframes broqui-glow {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@keyframes broqui-halo {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Reduced motion: life layer off (blink + 200 ms morphs remain, JS-side). */
+.broqui-root[data-reduced="true"] .broqui-float,
+.broqui-root[data-reduced="true"] .broqui-sway,
+.broqui-root[data-reduced="true"] .broqui-svg,
+.broqui-root[data-reduced="true"] .broqui-glow,
+.broqui-root[data-reduced="true"] .broqui-halo {
+  animation: none;
+}
