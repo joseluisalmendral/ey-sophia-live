@@ -29,14 +29,14 @@ export const PALETTE = {
   eye: "#a8f7d3",
   rim: "#d8ff6b",
   eyYellow: "#ffe600",
-  shellTop: "#1c6f70",
-  shellMid: "#0f4a4f",
-  shellDeep: "#082e33",
-  edgeTop: "#a3fbdb",
-  edgeMid: "#4fd6b8",
-  edgeBottom: "#1b8e88",
-  mouthDark: "#072a2e",
-  lid: "#0d3d43",
+  shellTop: "#0d3a42",
+  shellMid: "#072a31",
+  shellDeep: "#04191e", /* near-black teal at the centre/bottom */
+  edgeTop: "#7dfbe6",
+  edgeMid: "#3fe0cc", /* glowing cyan rim */
+  edgeBottom: "#1f9c95",
+  mouthDark: "#04181c",
+  lid: "#082a31",
   blush: "#ff7fa3",
   sweat: "#bff5ff",
   bloomCore: "#5ff2c4",
@@ -58,6 +58,9 @@ export const FRAME = "M224 110 V78 Q224 64 210 64 H110 Q96 64 96 78 V160";
 /** Specular wedge (top-left) and the top-right rim-light arc. */
 export const SPEC = "M92 52 Q160 42 176 60 Q120 66 96 96 Z";
 export const RIM = "M168 44 Q244 46 246 128";
+
+/** Halo: short warm arc on the top-right segment (r=132 about C, −80°…−5°). */
+export const HALO_WARM_ARC = "M182.9 20 A132 132 0 0 1 291.5 138.5";
 
 /** Happy crescents ("^ ^") — cross-faded over the capsule eyes. */
 export const ARC_L = "M119 157 Q132 131 145 157";

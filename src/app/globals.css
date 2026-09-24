@@ -105,9 +105,9 @@
   --color-broqui-line: #8ff5c8; /* eyes + inner line */
   --color-broqui-eye: #a8f7d3; /* eye capsules (a hair lighter than the line) */
   --color-broqui-rim: #d8ff6b; /* top-right rim light (yellow-green, EY kiss) */
-  --color-broqui-shell: #0f4a4f; /* glass body mid tone */
-  --color-broqui-shell-deep: #082e33; /* glass body bottom */
-  --color-broqui-edge: #4fd6b8; /* shell edge stroke */
+  --color-broqui-shell: #072a31; /* dark teal glass body */
+  --color-broqui-shell-deep: #04191e; /* near-black teal centre/bottom */
+  --color-broqui-edge: #3fe0cc; /* glowing cyan rim */
   --color-broqui-glow: rgb(127 240 196 / 0.35);
 
   /* --- Speech bubble (tokens only; component lands in E3) --- */

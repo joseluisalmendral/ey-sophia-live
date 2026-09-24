@@ -1,7 +1,7 @@
 /*
  * Broqui — life layer (float / sway / breathe / glow / halo) as CSS keyframes
  * on the compositor. Everything here is transform + opacity only; the periods
- * are deliberately incommensurate (3600 / 5200 / 3800 / 40000 ms) so the idle
+ * are deliberately incommensurate (3600 / 5200 / 3800 / 6400 ms) so the idle
  * never reads as a mechanical loop.
  *
  * Only `.broqui-root` is promoted with will-change (motion spec §E).
@@ -55,7 +55,7 @@
 
 .broqui-halo {
   transform-origin: 50% 44.1%; /* body centre (150 / 340) */
-  animation: broqui-halo 40000ms linear infinite;
+  animation: broqui-halo 6400ms ease-in-out -1600ms infinite;
 }
 
 .broqui-glow-wrap {
@@ -141,11 +141,12 @@
 }
 
 @keyframes broqui-halo {
-  from {
-    transform: rotate(0deg);
+  0%,
+  100% {
+    opacity: 0.82;
   }
-  to {
-    transform: rotate(360deg);
+  50% {
+    opacity: 1;
   }
 }
 

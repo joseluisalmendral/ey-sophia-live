@@ -51,7 +51,7 @@
  *           .broqui-squash → pose tilt + squash/stretch (springs × keyframes)
  *             .broqui-glow-wrap → bloom pulses (one-shots)
  *               .broqui-glow    → breathing bloom (CSS)
- *             svg.broqui-halo   → halo ring, 1 turn / 40 s (CSS)
+ *             svg.broqui-halo   → halo ring (static, gentle opacity breathe)
  *             svg.broqui-svg    → the character (breathe via CSS)
  *   SVG tier (main thread, small area): face offset, eyes/lids/arcs, mouth
  *   morph (12 control-point MotionValues → one `d` write per frame), mouth
@@ -88,6 +88,7 @@ import {
   EYE,
   EYE_C,
   FRAME,
+  HALO_WARM_ARC,
   LID_HIDDEN,
   LINE_W,
   MOUTHS,
@@ -1132,18 +1133,27 @@ export function Broqui({
               <div className="broqui-glow" />
             </motion.div>
 
-            {/* Halo ring — its own svg so the CSS rotation is a plain HTML transform. */}
+            {/* Halo — its own svg (HTML-level CSS breathe). Teal ring fading
+                from the top-left, plus a short warm arc where the rim light hits. */}
             <svg className="broqui-svg broqui-halo" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}>
               <defs>
-                <linearGradient id={id("ring")} x1="0.15" y1="0.9" x2="0.9" y2="0.1">
-                  <stop offset="0" stopColor="#2fbfa0" stopOpacity="0" />
-                  <stop offset="0.35" stopColor="#6fe9c6" stopOpacity="0.55" />
-                  <stop offset="0.8" stopColor={PALETTE.rim} stopOpacity="0.95" />
-                  <stop offset="1" stopColor="#ffe98a" stopOpacity="0" />
+                <linearGradient id={id("ring")} x1="0" y1="0.15" x2="1" y2="0.85">
+                  <stop offset="0" stopColor="#5fe9d0" stopOpacity="0.8" />
+                  <stop offset="0.4" stopColor="#3fbfae" stopOpacity="0.38" />
+                  <stop offset="0.72" stopColor="#3fbfae" stopOpacity="0" />
+                  <stop offset="1" stopColor="#3fbfae" stopOpacity="0" />
+                </linearGradient>
+                <linearGradient id={id("warm")} gradientUnits="userSpaceOnUse" x1="183" y1="20" x2="291" y2="139">
+                  <stop offset="0" stopColor="#d7f542" stopOpacity="0" />
+                  <stop offset="0.35" stopColor="#d7f542" stopOpacity="0.95" />
+                  <stop offset="0.7" stopColor="#9be15d" stopOpacity="0.8" />
+                  <stop offset="1" stopColor="#9be15d" stopOpacity="0" />
                 </linearGradient>
               </defs>
-              <circle cx={CENTER.x} cy={CENTER.y} r="132" fill="none" stroke={`url(#${id("ring")})`} strokeWidth="10" opacity="0.14" />
-              <circle cx={CENTER.x} cy={CENTER.y} r="132" fill="none" stroke={`url(#${id("ring")})`} strokeWidth="2.5" />
+              <circle cx={CENTER.x} cy={CENTER.y} r="132" fill="none" stroke={`url(#${id("ring")})`} strokeWidth="12" opacity="0.16" />
+              <circle cx={CENTER.x} cy={CENTER.y} r="132" fill="none" stroke={`url(#${id("ring")})`} strokeWidth="2.2" />
+              <path d={HALO_WARM_ARC} fill="none" stroke={`url(#${id("warm")})`} strokeWidth="10" strokeLinecap="round" opacity="0.28" />
+              <path d={HALO_WARM_ARC} fill="none" stroke={`url(#${id("warm")})`} strokeWidth="2.6" strokeLinecap="round" />
             </svg>
 
             <svg className="broqui-svg" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}>
@@ -1154,26 +1164,26 @@ export function Broqui({
                   <stop offset="1" stopColor={PALETTE.shellDeep} />
                 </linearGradient>
                 <linearGradient id={id("band")} x1="0.1" y1="0" x2="0.9" y2="1">
-                  <stop offset="0" stopColor="#5fd6c8" stopOpacity="0.92" />
-                  <stop offset="0.5" stopColor="#1f8a88" stopOpacity="0.9" />
-                  <stop offset="1" stopColor="#0e5058" stopOpacity="0.95" />
+                  <stop offset="0" stopColor="#1f8f8c" stopOpacity="0.95" />
+                  <stop offset="0.5" stopColor="#115d62" stopOpacity="0.95" />
+                  <stop offset="1" stopColor="#0a3d45" stopOpacity="0.97" />
                 </linearGradient>
-                <linearGradient id={id("edge")} x1="0.2" y1="0" x2="0.8" y2="1">
-                  <stop offset="0" stopColor="#c7ffec" stopOpacity="1" />
-                  <stop offset="0.45" stopColor={PALETTE.edgeMid} stopOpacity="0.85" />
-                  <stop offset="1" stopColor={PALETTE.edgeBottom} stopOpacity="0.75" />
+                <linearGradient id={id("edge")} x1="0.15" y1="0" x2="0.85" y2="1">
+                  <stop offset="0" stopColor="#8dfff0" stopOpacity="1" />
+                  <stop offset="0.45" stopColor={PALETTE.edgeMid} stopOpacity="0.95" />
+                  <stop offset="1" stopColor={PALETTE.edgeBottom} stopOpacity="0.85" />
                 </linearGradient>
-                <radialGradient id={id("glass")} gradientUnits="userSpaceOnUse" cx="150" cy="110" r="170">
-                  <stop offset="0" stopColor="#3fb3a6" stopOpacity="0.35" />
-                  <stop offset="0.55" stopColor="#1d7a78" stopOpacity="0.1" />
-                  <stop offset="1" stopColor="#1d7a78" stopOpacity="0" />
+                <radialGradient id={id("glass")} gradientUnits="userSpaceOnUse" cx="140" cy="100" r="170">
+                  <stop offset="0" stopColor="#2aa79c" stopOpacity="0.2" />
+                  <stop offset="0.55" stopColor="#145f60" stopOpacity="0.06" />
+                  <stop offset="1" stopColor="#145f60" stopOpacity="0" />
                 </radialGradient>
-                <radialGradient id={id("floor")} gradientUnits="userSpaceOnUse" cx="160" cy="250" r="90">
-                  <stop offset="0" stopColor={PALETTE.bloomCore} stopOpacity="0.22" />
-                  <stop offset="1" stopColor={PALETTE.bloomCore} stopOpacity="0" />
+                <radialGradient id={id("floor")} gradientUnits="userSpaceOnUse" cx="160" cy="252" r="90">
+                  <stop offset="0" stopColor={PALETTE.edgeMid} stopOpacity="0.14" />
+                  <stop offset="1" stopColor={PALETTE.edgeMid} stopOpacity="0" />
                 </radialGradient>
                 <linearGradient id={id("spec")} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#ffffff" stopOpacity="0.28" />
+                  <stop offset="0" stopColor="#ffffff" stopOpacity="0.22" />
                   <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
                 </linearGradient>
                 <linearGradient id={id("rim")} gradientUnits="userSpaceOnUse" x1="168" y1="44" x2="246" y2="128">
@@ -1200,26 +1210,29 @@ export function Broqui({
 
               {/* ---------------- body ---------------- */}
               <g>
-                {/* soft outer edge glow (pre-blurred by width + alpha, no filter) */}
-                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="18" opacity="0.12" />
-                <path d={SHIELD} fill="none" stroke={PALETTE.edgeTop} strokeWidth="7" opacity="0.28" />
-                {/* rim band (lighter, translucent) */}
-                <path d={SHIELD} fill={`url(#${id("band")})`} stroke={`url(#${id("edge")})`} strokeWidth="3" />
-                {/* inner glass (darker), inset from the rim */}
+                {/* outer cyan bloom spill (stacked wide strokes = pre-blurred, no filter) */}
+                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="64" opacity="0.04" />
+                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="42" opacity="0.06" />
+                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="26" opacity="0.1" />
+                <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="13" opacity="0.17" />
+                <path d={SHIELD} fill="none" stroke="#7dfbe6" strokeWidth="6" opacity="0.34" />
+                {/* rim band + glowing cyan edge */}
+                <path d={SHIELD} fill={`url(#${id("band")})`} stroke={`url(#${id("edge")})`} strokeWidth="3.5" />
+                {/* inner dark glass, inset from the rim, with a subtle inner border */}
                 <g transform={`translate(${CENTER.x} ${CENTER.y}) scale(0.918 0.926) translate(${-CENTER.x} ${-CENTER.y})`}>
-                  <path d={SHIELD} fill={`url(#${id("shell")})`} stroke="#0a3238" strokeWidth="1.5" strokeOpacity="0.7" />
+                  <path d={SHIELD} fill={`url(#${id("shell")})`} stroke="#041418" strokeWidth="1.5" strokeOpacity="0.8" />
                   <path d={SHIELD} fill={`url(#${id("glass")})`} />
                   <path d={SHIELD} fill={`url(#${id("floor")})`} />
-                  <path d={SHIELD} fill="none" stroke="#9cf7d6" strokeWidth="1.2" strokeOpacity="0.28" />
+                  <path d={SHIELD} fill="none" stroke={PALETTE.edgeMid} strokeWidth="1.2" strokeOpacity="0.3" />
                 </g>
                 <g clipPath={`url(#${id("shellClip")})`}>
-                  <path d={SHIELD} fill="none" stroke="#bafde8" strokeWidth="2.5" opacity="0.22" transform="translate(0 1.5)" />
+                  <path d={SHIELD} fill="none" stroke="#bafde8" strokeWidth="2.5" opacity="0.18" transform="translate(0 1.5)" />
                 </g>
                 <MG t={rig.specT}>
                   <path d={SPEC} fill={`url(#${id("spec")})`} />
                 </MG>
-                <path d={RIM} fill="none" stroke={`url(#${id("rim")})`} strokeWidth="9" strokeLinecap="round" opacity="0.3" />
-                <path d={RIM} fill="none" stroke={`url(#${id("rim")})`} strokeWidth="3" strokeLinecap="round" />
+                <path d={RIM} fill="none" stroke={`url(#${id("rim")})`} strokeWidth="9" strokeLinecap="round" opacity="0.25" />
+                <path d={RIM} fill="none" stroke={`url(#${id("rim")})`} strokeWidth="2.6" strokeLinecap="round" />
 
                 {/* ---------------- face ---------------- */}
                 <MG t={rig.faceT}>
