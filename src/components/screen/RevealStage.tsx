@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { durations } from "@/lib/motion/tokens";
-import { fireConfettiBurst, startFireworksFinale } from "@/lib/effects/fireworks";
+import { brandConfettiColors, fireConfettiBurst, startFireworksFinale } from "@/lib/effects/fireworks";
 import { playWinnerSting, type WinnerStingHandle } from "@/lib/effects/winnerSting";
 import { Podium } from "./Podium";
 import { resolveReveal, type RevealOutcome } from "./winner";
@@ -29,7 +29,9 @@ import type { RankedTeam, TieRule } from "@/lib/types";
  *       reveal/CameraCuts.tsx.
  *   (e) PODIUM    — the hero shot pulls back while the letterbox retracts onto
  *       the podium climax: rise + crown + confetti edge-burst + ~4s fireworks
- *       finale that STOPS.
+ *       finale that STOPS. Confetti draws on a canvas BEHIND the podium (never
+ *       over the crown, names or scores) in 3–4 brand hues led by the winner
+ *       colour, halving its density after 3 s.
  *
  * Timings live in reveal/constants.ts (~16s full arc, ~4s reduced).
  *
@@ -76,6 +78,7 @@ function useRevealChoreography(
   outcome: RevealOutcome,
   reduced: boolean,
   ready: boolean,
+  confettiCanvas: RefObject<HTMLCanvasElement | null>,
 ) {
   const [beat, setBeat] = useState<Beat>("suspense");
   // Captured at the end of the suspense beat: the outcome the teasers and the
@@ -141,13 +144,15 @@ function useRevealChoreography(
         // Beat (e) PODIUM — letterbox retracts onto the full climax.
         setBeat("podium");
 
-        // Confetti edge-burst once the plinths land.
+        // Confetti edge-burst once the plinths land — behind the podium, in
+        // the winner's colour + EY yellow + white + mint.
         await wait(600);
         if (cancelled) return;
-        void fireConfettiBurst();
+        const target = { canvas: confettiCanvas.current, colors: brandConfettiColors(fo.winners[0]?.color) };
+        void fireConfettiBurst(target);
 
         // Sustained fireworks finale: airburst shells on an interval, then STOP.
-        stopFireworks = startFireworksFinale(durations.fireworks * 1000);
+        stopFireworks = startFireworksFinale(durations.fireworks * 1000, target);
       } else {
         // Reduced motion or zero votes: no camera cuts — the curtain's
         // AnimatePresence exit opens straight onto the podium / no-votes state.
@@ -182,11 +187,14 @@ function useRevealChoreography(
 
 export function RevealStage({ teams, tieRule, reduced, ready, onBeatChange }: RevealStageProps) {
   const liveOutcome = resolveReveal(teams, tieRule);
+  const confettiCanvas = useRef<HTMLCanvasElement | null>(null);
   const { beat, finalOutcome, scope, muted, toggleMute } = useRevealChoreography(
     liveOutcome,
     reduced,
     ready,
+    confettiCanvas,
   );
+  const names = teams.map((t) => t.name);
   const onBeatChangeRef = useRef(onBeatChange);
   useEffect(() => {
     onBeatChangeRef.current = onBeatChange;
@@ -257,21 +265,32 @@ export function RevealStage({ teams, tieRule, reduced, ready, onBeatChange }: Re
             transition={{ duration: durations.base }}
             className="relative z-10 h-full"
           >
+            {/* Confetti / fireworks canvas BEHIND the podium (z-0 vs z-[1]). */}
+            <canvas
+              ref={confettiCanvas}
+              className="pointer-events-none absolute inset-0 z-0 h-full w-full"
+              aria-hidden
+            />
             {/* The podium mounts behind the curtain and is unveiled as it opens. */}
-            {beat === "podium" &&
-              (outcome.zeroVotes ? (
-                <ZeroVotes reduced={reduced} />
-              ) : (
-                <Podium outcome={outcome} reduced={reduced} />
-              ))}
-            {/* Mascot anchors on the podium margins (bottom-aligned). */}
+            {beat === "podium" && (
+              <div className="relative z-[1] h-full">
+                {outcome.zeroVotes ? (
+                  <ZeroVotes reduced={reduced} />
+                ) : (
+                  <Podium outcome={outcome} names={names} reduced={reduced} />
+                )}
+              </div>
+            )}
+            {/* Mascot anchors on the podium margins (bottom-aligned). The
+                bubble is capped to the free margin so it stays next to Broqui
+                instead of sliding up over the podium. */}
             {beat === "podium" && (
               <>
                 <div
                   data-mascot-anchor="podium-right"
                   data-mascot-size="220"
-                  data-mascot-bubble="above,below,above-left"
-                  data-mascot-bubble-max="0.4"
+                  data-mascot-bubble="above,above-left,below"
+                  data-mascot-bubble-max="0.18"
                   data-mascot-edge="right"
                   data-mascot-align="center"
                   className="pointer-events-none absolute right-[1.5%] top-[42%] h-[44%] w-[17%]"
@@ -280,8 +299,8 @@ export function RevealStage({ teams, tieRule, reduced, ready, onBeatChange }: Re
                 <div
                   data-mascot-anchor="podium-left"
                   data-mascot-size="220"
-                  data-mascot-bubble="above,below,above-right"
-                  data-mascot-bubble-max="0.4"
+                  data-mascot-bubble="above,above-right,below"
+                  data-mascot-bubble-max="0.18"
                   data-mascot-edge="left"
                   data-mascot-align="center"
                   className="pointer-events-none absolute left-[1.5%] top-[42%] h-[44%] w-[17%]"
@@ -296,6 +315,7 @@ export function RevealStage({ teams, tieRule, reduced, ready, onBeatChange }: Re
               {beat === "cameras" && (
                 <CameraCuts
                   winners={outcome.winners}
+                  names={names}
                   totalVotes={outcome.totalVotes}
                   timings={reduced ? REVEAL_BEATS_REDUCED : REVEAL_BEATS}
                 />

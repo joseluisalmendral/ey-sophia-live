@@ -33,6 +33,14 @@ const NOOP_HANDLE: WinnerStingHandle = { stop: () => {} };
 const ARPEGGIO = [523.25, 659.25, 783.99, 1046.5];
 
 /**
+ * Tempo of the sting: one arpeggio note every 130 ms. Exported so the mascot's
+ * podium dance hops on the same pulse (two notes per hop) and the crowd reads
+ * the two as one musical cue.
+ */
+export const WINNER_STING_STEP_MS = 130;
+const STEP_S = WINNER_STING_STEP_MS / 1000;
+
+/**
  * Play the triumphant sting once. Best-effort: returns a no-op handle if audio
  * cannot be created. Accepts no arguments.
  */
@@ -61,7 +69,7 @@ export function playWinnerSting(): WinnerStingHandle {
 
   try {
     ARPEGGIO.forEach((freq, i) => {
-      const start = now + i * 0.13;
+      const start = now + i * STEP_S;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
@@ -80,7 +88,7 @@ export function playWinnerSting(): WinnerStingHandle {
     });
 
     // Sustained rising fifth (G5 + C6) tail to resolve the sting.
-    const tailStart = now + ARPEGGIO.length * 0.13;
+    const tailStart = now + ARPEGGIO.length * STEP_S;
     [783.99, 1046.5].forEach((freq) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();

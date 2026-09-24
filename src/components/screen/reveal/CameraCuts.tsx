@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Crown } from "../Crown";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
+import { teamInitials } from "../anonymize";
 import type { RankedTeam } from "@/lib/types";
 
 /**
@@ -43,6 +44,8 @@ import type { RankedTeam } from "@/lib/types";
 
 export interface CameraCutsProps {
   winners: RankedTeam[];
+  /** Every team name of the poll (collision-aware chip initials). */
+  names: readonly string[];
   /** Total votes in the poll — shown on the shot-2 broadcast HUD. */
   totalVotes: number;
   /** Seconds per shot, from reveal constants. */
@@ -54,7 +57,7 @@ type Shot = 1 | 2 | 3;
 /** Whip-pan direction per incoming shot (1 has no whip — the curtain reveals it). */
 const WHIP_DIR: Record<Shot, 1 | -1> = { 1: 1, 2: -1, 3: 1 };
 
-export function CameraCuts({ winners, totalVotes, timings }: CameraCutsProps) {
+export function CameraCuts({ winners, names, totalVotes, timings }: CameraCutsProps) {
   const [shot, setShot] = useState<Shot>(1);
 
   useEffect(() => {
@@ -92,7 +95,7 @@ export function CameraCuts({ winners, totalVotes, timings }: CameraCutsProps) {
         {shot === 2 && (
           <ShotDolly winners={winners} totalVotes={totalVotes} seconds={timings.camDolly} />
         )}
-        {shot === 3 && <ShotHero winners={winners} seconds={timings.camHero} />}
+        {shot === 3 && <ShotHero winners={winners} names={names} seconds={timings.camHero} />}
       </motion.div>
 
       {/* WHIP-PAN transition — directional blur streak + chromatic flash. */}
@@ -469,7 +472,7 @@ function ShotDolly({
 }
 
 /** SHOT 3 — frontal hero: overshoot punch-in, shockwave, lens flare, crown drop. */
-function ShotHero({ winners, seconds }: { winners: RankedTeam[]; seconds: number }) {
+function ShotHero({ winners, names, seconds }: { winners: RankedTeam[]; names: readonly string[]; seconds: number }) {
   const accent = winners[0]?.color ?? "#fff";
   // The punch-in spring lands ~0.45s in; shockwave + flare sync to that frame.
   const landing = 0.4;
@@ -559,7 +562,7 @@ function ShotHero({ winners, seconds }: { winners: RankedTeam[]; seconds: number
               </motion.div>
               <TeamColorChip
                 color={w.color}
-                label={w.name.charAt(0).toUpperCase()}
+                label={teamInitials(w.name, names)}
                 size={winners.length > 1 ? 64 : 80}
               />
               <span
