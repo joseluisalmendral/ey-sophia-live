@@ -291,6 +291,79 @@ body {
   }
 }
 
+/*
+ * Broadcast grammar (projector, E6). Every continuous loop below animates
+ * transform/opacity only (compositor-friendly at 1080p/4K).
+ *  - live dot: 10px red dot breathing + an expanding halo ring;
+ *  - presence ping: one ring pulse per lobby join (re-keyed from React);
+ *  - count-in ring: two half-rings rotating in turn (conic "fill" built from
+ *    rotations, no stroke-dashoffset / no filters).
+ */
+@keyframes liveDot {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.55;
+  }
+}
+
+@keyframes liveHalo {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes presencePing {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes ringHalf {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(180deg);
+  }
+}
+
+.live-dot {
+  animation: liveDot 1.2s ease-in-out infinite;
+}
+.live-halo {
+  animation: liveHalo 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.presence-ping {
+  animation: presencePing 0.5s cubic-bezier(0, 0, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot,
+  .live-halo,
+  .presence-ping {
+    animation: none !important;
+  }
+  .live-halo,
+  .presence-ping {
+    opacity: 0;
+  }
+}
+
 /* Home join-code field: its own yellow focus glow replaces the global ring
    (which would also square its corners). */
 .code-input:focus-visible {

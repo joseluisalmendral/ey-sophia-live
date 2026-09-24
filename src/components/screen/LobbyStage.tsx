@@ -1,30 +1,34 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
-import { AnimatePresence, motion, useAnimate } from "motion/react";
-import { QrCode } from "@/components/atoms/QrCode";
-import { CountInTimer } from "@/components/atoms/CountInTimer";
+import { memo, useCallback, useState, type CSSProperties } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { CountInTimer, type CountInPhase } from "@/components/atoms/CountInTimer";
 import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { durations, easings } from "@/lib/motion/tokens";
 import { teamInitial } from "./anonymize";
+import { chipRem } from "./broadcast/chipRem";
+import { QrFrame } from "./broadcast/QrFrame";
 import type { Poll, RankedTeam, Team } from "@/lib/types";
 
 /**
- * LobbyStage — the cinematic pre-voting screen (status draft/countdown).
+ * LobbyStage — the pre-voting projector board (status draft/countdown).
  *
- * LEFT: a GIANT QR (encodes the VOTER url, never the screen url) as the clear
- * hero with a single instruction under it ("Escanea para unirte"), plus a live
- * joined counter: ONLY the number of participants (no aliases on the big
- * screen), rolling up via NumberFlow with a pop on every increment. The join
- * code is DEMOTED to a single discreet fallback line pinned to the very bottom
- * of the stage — outside the QR block — so it reads as the backup path, never
- * a competing step.
- * RIGHT: finalist cards teased at ZERO — anticipation, never a dead "no data".
+ * LEFT (36%): the QR (encodes the VOTER url) in a glass frame with four yellow
+ * viewfinder corners, "Escanea para unirte" in white, and the fallback badge
+ * (host + big yellow join code).
+ * RIGHT (64%): kicker "VOTACIÓN FINAL" + the poll title (balanced, ≤ 2 lines),
+ * the presence counter (mint, one ring ping per join) and the finalists as
+ * glass rows — no counters, no numbering. Anonymous runs show ONE card
+ * ("{n} finalistas · nombres ocultos hasta el final") + neutral silhouettes;
+ * the teams arrive already masked from ScreenStage, this only avoids even
+ * hinting at a count per team.
+ * COUNTDOWN: the count-in replaces the finalists as the hero of the right
+ * column; in the last 5 s it takes the column over (ring + giant seconds) and
+ * the title/presence step aside.
  *
- * For `countdown` with a configured count-in, a BIG count-in to `opensAt` owns
- * the top of the join column ("La votación abre en… MM:SS"); otherwise an
- * evocative "preparados" pulse.
+ * The bottom 24% of the right column is a layout-reserved strip for the
+ * co-host (anchors `lobby-lane` / `lobby-mid`); nothing else renders there.
  */
 
 export interface LobbyStageProps {
@@ -37,20 +41,25 @@ export interface LobbyStageProps {
   /** Server open timestamp (a FUTURE time during countdown) driving the count-in. */
   opensAt: string | null;
   reduced: boolean;
-  /**
-   * Distinct joins this run (null until the first successful read). Fed by the
-   * container (useLobbyJoins in ScreenClient) or by the /lab engine.
-   */
+  /** Distinct joins this run (null until the first successful read). */
   joined: number | null;
+  /** Anonymous-display poll: finalists render as one masked card. */
+  anonymous?: boolean;
 }
 
-/** Extract a friendly "dominio/" hint from the absolute voter URL (host only). */
+/** Extract a friendly host hint from the absolute voter URL. */
 function domainHint(voterUrl: string): string {
   try {
     return new URL(voterUrl).host;
   } catch {
     return "";
   }
+}
+
+/** "IA Hackathon · Gran final" → two balanced lines, no "·" separators. */
+function titleLines(title: string): string[] {
+  const parts = title.split(/\s+[·•|—]\s+/).map((p) => p.trim()).filter(Boolean);
+  return parts.length === 2 ? parts : [parts.join(" ")];
 }
 
 export const LobbyStage = memo(function LobbyStage({
@@ -62,173 +71,149 @@ export const LobbyStage = memo(function LobbyStage({
   opensAt,
   reduced,
   joined,
+  anonymous = false,
 }: LobbyStageProps) {
-  // Premium pop: the counter scales up briefly every time the number grows.
-  // NumberFlow keeps its digit roll; this adds the "someone just joined" beat.
-  const [counterScope, animateCounter] = useAnimate();
-  useEffect(() => {
-    if (reduced || joined === null || joined <= 0) return;
-    if (counterScope.current === null) return;
-    void animateCounter(
-      counterScope.current,
-      { scale: [1, 1.16, 1] },
-      { duration: 0.45, ease: "easeOut" },
-    );
-  }, [joined, reduced, animateCounter, counterScope]);
   const domain = domainHint(voterUrl);
-  // A future opens_at drives the count-in; only show it during countdown.
-  // Mount-time clock read (lazy state keeps render pure); the stage re-mounts on
-  // every status flip, and CountInTimer owns the live ticking from here on.
+  // A future opens_at drives the count-in; only during countdown. Mount-time
+  // clock read (lazy state keeps render pure); the stage re-mounts on every
+  // status flip and CountInTimer owns the live ticking from there on.
   const [mountedAt] = useState(() => Date.now());
   const showCountIn =
     isCountdown && opensAt !== null && new Date(opensAt).getTime() > mountedAt;
-  // Prefer live ranked teams (keeps order stable into the race); fall back to the
-  // server snapshot so the right column is never blank before realtime is ready.
+  const [phase, setPhase] = useState<CountInPhase>("count");
+  const onPhase = useCallback((p: CountInPhase) => setPhase(p), []);
+  const takeover = showCountIn && phase !== "count";
+
   const cards: Array<Pick<Team, "id" | "name" | "color">> =
     liveTeams.length > 0 ? liveTeams : teams;
+  const lines = titleLines(poll.title);
 
   return (
-    <div className="relative grid h-full w-full grid-cols-[minmax(0,42%)_minmax(0,58%)] items-center gap-[clamp(1.5rem,3.5vw,3.5rem)] px-[clamp(1.5rem,3.5vw,4rem)] py-[clamp(1rem,3vh,2.5rem)] pb-[clamp(2.2rem,5vh,3.4rem)]">
-      {/* LEFT — join column. `justify-center` + the same vertical rhythm as the
-          right column keeps both blocks on one shared optical axis. */}
-      <div className="flex h-full flex-col items-center justify-center gap-[clamp(1rem,2.6vh,2.2rem)] text-center">
-        {/* Count-in owns the top of the column while the poll is counting in. */}
-        {showCountIn && (
-          <motion.div
-            initial={reduced ? { opacity: 0 } : { opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: durations.base, ease: easings.decel }}
-            data-mascot-keepout="countdown"
-          >
-            <CountInTimer opensAt={opensAt} />
-          </motion.div>
-        )}
-
+    <div
+      className="relative grid h-full w-full grid-cols-[minmax(0,36%)_minmax(0,64%)] gap-[clamp(1.5rem,3vw,3.5rem)] px-[clamp(1.5rem,3.5vw,4rem)] py-[clamp(0.8rem,2.4vh,2rem)]"
+      style={{ "--countin-ring": "min(50vh, 30vw)" } as CSSProperties}
+    >
+      {/* LEFT — join column */}
+      <div className="flex min-w-0 flex-col items-center justify-center gap-[clamp(0.8rem,2.4vh,2rem)] text-center">
         <motion.div
-          initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
+          initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: durations.slow, ease: easings.decel }}
           data-mascot-keepout="qr"
         >
-          {/* Fluid QR: scales with the stage (viewport-capped) so it fills the
-              join column on a big projector without ever forcing scroll. */}
-          <QrCode
-            value={voterUrl}
-            size={400}
-            className="w-[min(clamp(320px,26vw,500px),58vh)] max-w-full [&_svg]:h-auto [&_svg]:w-full"
-          />
+          <QrFrame value={voterUrl} className="w-[min(24vw,42vh)]" />
         </motion.div>
 
-        {/* The ONLY instruction under the QR — one clear step, gently pulsing. */}
-        <motion.span
-          initial={{ opacity: 0 }}
-          animate={reduced ? { opacity: 1 } : { opacity: [0.55, 1, 0.55] }}
-          transition={
-            reduced
-              ? { duration: durations.base }
-              : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }
-          }
-          className="font-display text-[clamp(1.2rem,2vw,1.9rem)] font-bold text-ey-yellow"
-        >
+        <span className="font-display text-proj-h2 font-black leading-none text-text">
           Escanea para unirte
-        </motion.span>
+        </span>
 
-        {/* Live joined counter: participants number only — no aliases on screen.
-            No reserved height: an empty slot would push the QR off the shared
-            optical center, so the block grows in with an animated height. */}
-        <div className="flex w-full flex-col items-center justify-start">
-          <AnimatePresence>
-            {joined !== null && joined > 0 && (
-              <motion.div
-                key="joined-count"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: durations.base }}
-                className="flex items-baseline gap-2 overflow-hidden"
-                data-mascot-keepout="counter"
-              >
-                <span
-                  ref={counterScope}
-                  className="inline-block font-display text-[clamp(2.6rem,4.8vw,4.6rem)] font-black text-power-green tabular-nums"
-                >
-                  <CountUp value={joined} />
-                </span>
-                <span className="text-[clamp(1rem,1.4vw,1.35rem)] font-semibold uppercase tracking-[0.18em] text-text-dim">
-                  en la sala
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div
+          className="glass glass--flat flex flex-col items-center gap-[0.35rem] px-[clamp(1rem,1.6vw,1.8rem)] py-[clamp(0.55rem,1.2vh,0.9rem)]"
+          data-mascot-keepout="code"
+        >
+          <span className="text-proj-label font-semibold leading-none text-text-dim">
+            o entra en{" "}
+            {domain && <span className="font-bold text-text">{domain}</span>}
+          </span>
+          <span className="flex items-baseline gap-[0.6em] leading-none">
+            <span className="font-display text-proj-label font-extrabold uppercase tracking-[0.2em] text-text-dim">
+              código
+            </span>
+            <span
+              className="font-display text-proj-h1 font-black uppercase tracking-[0.12em] text-ey-yellow"
+              style={{ textShadow: "0 0 24px rgb(255 230 0 / 0.35)" }}
+            >
+              {poll.joinCode}
+            </span>
+          </span>
         </div>
       </div>
 
-      {/* RIGHT — teased finalists */}
-      <div className="flex h-full flex-col justify-center gap-[clamp(1rem,2.4vh,2rem)]">
-        <motion.div
-          initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: durations.slow, ease: easings.decel }}
-          className="flex flex-col gap-[clamp(0.35rem,1vh,0.7rem)]"
-          data-mascot-keepout="title"
+      {/* RIGHT — programme column + reserved mascot strip (bottom 24%). */}
+      <div className="flex min-h-0 min-w-0 flex-col">
+        <div
+          className={[
+            "flex min-h-0 flex-1 flex-col justify-center gap-[clamp(0.9rem,2.4vh,2rem)]",
+            takeover ? "items-center" : "items-stretch",
+          ].join(" ")}
         >
-          <h1 className="font-display text-[clamp(1.9rem,3.4vw,3.5rem)] font-black leading-none text-text">
-            {poll.title}
-          </h1>
-          <span className="text-[clamp(0.9rem,1.35vw,1.25rem)] font-medium uppercase tracking-[0.22em] text-text-dim">
-            {isCountdown ? "Preparados…" : "Los votos aparecen en cuanto abra la votación"}
-          </span>
-        </motion.div>
-
-        <ul className="flex flex-col gap-[clamp(0.6rem,1.6vh,1.2rem)]" data-mascot-keepout="finalists">
-          {cards.map((team, i) => (
-            <motion.li
-              key={team.id}
-              initial={reduced ? { opacity: 0 } : { opacity: 0, x: 28 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{
-                delay: reduced ? 0 : 0.2 + i * 0.1,
-                duration: durations.base,
-                ease: easings.standard,
-              }}
-              className="flex items-center gap-[clamp(0.7rem,1.6vw,1.4rem)] rounded-lg border border-white/8 bg-white/[0.03] px-[clamp(0.9rem,1.8vw,1.6rem)] py-[clamp(0.7rem,1.9vh,1.35rem)]"
-            >
-              <TeamColorChip
-                color={team.color}
-                label={teamInitial(team.name)}
-                size={52}
-              />
-              <span className="flex-1 truncate font-display text-[clamp(1.25rem,2.5vw,2.5rem)] font-extrabold text-text">
-                {team.name}
-              </span>
-              <motion.span
-                animate={reduced ? undefined : { opacity: [0.4, 0.7, 0.4] }}
-                transition={
-                  reduced
-                    ? undefined
-                    : { duration: 2.4, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 }
-                }
-                className="font-display text-[clamp(1.45rem,2.9vw,2.9rem)] font-black tabular-nums text-text-dim"
+          <AnimatePresence initial={false}>
+            {!takeover && (
+              <motion.div
+                key="head"
+                initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                transition={{ duration: durations.slow, ease: easings.decel }}
+                className="flex items-end justify-between gap-[clamp(1rem,2vw,2rem)]"
               >
-                0
-              </motion.span>
-            </motion.li>
-          ))}
-        </ul>
+                <div className="flex min-w-0 flex-col gap-[clamp(0.3rem,0.9vh,0.7rem)]" data-mascot-keepout="title">
+                  <span className="font-display text-proj-label font-extrabold uppercase leading-none tracking-[0.22em] text-ey-yellow">
+                    Votación final
+                  </span>
+                  <h1
+                    className="line-clamp-2 font-display text-proj-h1 font-black leading-[1.02] text-text"
+                    style={{ textWrap: "balance" }}
+                  >
+                    {lines.map((l, i) => (
+                      <span key={i} className="block">
+                        {l}
+                      </span>
+                    ))}
+                  </h1>
+                </div>
+                <Presence joined={joined} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {showCountIn ? (
+            <div
+              className={takeover ? "self-center" : "self-start"}
+              data-mascot-keepout="countdown"
+            >
+              <CountInTimer opensAt={opensAt} reduced={reduced} onPhase={onPhase} />
+            </div>
+          ) : isCountdown ? (
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={reduced ? { opacity: 1 } : { opacity: [0.55, 1, 0.55] }}
+              transition={reduced ? { duration: durations.base } : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              className="font-display text-proj-h2 font-black uppercase tracking-[0.12em] text-ey-yellow"
+              data-mascot-keepout="countdown"
+            >
+              Preparados…
+            </motion.span>
+          ) : anonymous ? (
+            <AnonymousFinalists count={cards.length} reduced={reduced} />
+          ) : (
+            <Finalists cards={cards} reduced={reduced} />
+          )}
+        </div>
+        {/* Reserved co-host strip (layout, not decoration). */}
+        <div className="h-[24%] shrink-0" aria-hidden />
       </div>
 
-      {/* Fallback join path — a single discreet line pinned to the stage foot,
-          well away from the QR block, for phones that can't scan. */}
-      {/* Mascot anchors (layout-reserved, empty): bottom-right lane, top-right
-          corner and the gap between the two columns. The host validates each
-          against the keep-outs above at runtime and skips any that collide. */}
+      {/* Mascot anchors (layout-reserved, empty): the two ends of the bottom
+          strip of the right column + the top-right corner. The host validates
+          each against the keep-outs at runtime and skips any that collide. */}
       <div
         data-mascot-anchor="lobby-lane"
         data-mascot-size="220"
         data-mascot-bubble="left,above-left"
         data-mascot-bubble-max="0.36"
         data-mascot-edge="right"
-        className="pointer-events-none absolute bottom-[5%] right-[2%] h-[27%] w-[22%]"
+        className="pointer-events-none absolute bottom-[3%] right-[2%] h-[24%] w-[22%]"
+        aria-hidden
+      />
+      <div
+        data-mascot-anchor="lobby-mid"
+        data-mascot-size="190"
+        data-mascot-bubble="above-right,right,above"
+        data-mascot-bubble-max="0.32"
+        data-mascot-edge="bottom"
+        className="pointer-events-none absolute bottom-[3%] left-[40%] h-[22%] w-[14%]"
         aria-hidden
       />
       <div
@@ -240,29 +225,131 @@ export const LobbyStage = memo(function LobbyStage({
         className="pointer-events-none absolute right-[2%] top-[1%] h-[19%] w-[15%]"
         aria-hidden
       />
-      <div
-        data-mascot-anchor="lobby-mid"
-        data-mascot-size="150"
-        data-mascot-bubble="below,above,left"
-        data-mascot-bubble-max="0.26"
-        data-mascot-edge="bottom"
-        className="pointer-events-none absolute left-[35.5%] top-[3%] h-[22%] w-[9%]"
-        aria-hidden
-      />
-
-      <p
-        className="pointer-events-none absolute bottom-[clamp(0.5rem,1.4vh,1rem)] left-1/2 w-max max-w-full -translate-x-1/2 text-center text-[clamp(0.65rem,0.9vw,0.85rem)] tracking-wide text-text-dim/70"
-        data-mascot-keepout="code"
-      >
-        ¿No puedes escanear? Entra en{" "}
-        {domain && <span className="font-semibold text-text-dim">{domain}/</span>}{" "}
-        con el código{" "}
-        <span className="font-mono font-bold uppercase tracking-[0.15em] text-text-dim">
-          {poll.joinCode}
-        </span>
-      </p>
     </div>
   );
 });
+
+/* ------------------------------------------------------------------ */
+
+/** Joined counter: mint number + label; the mint dot pings once per join. */
+function Presence({ joined }: { joined: number | null }) {
+  if (joined === null || joined <= 0) return null;
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-[0.45rem]" data-mascot-keepout="counter">
+      <span className="font-display text-proj-number font-black leading-none text-power-green tabular-nums">
+        <CountUp value={joined} aria-label={`${joined} en la sala`} />
+      </span>
+      <span className="flex items-center gap-[0.6em] font-display text-proj-label font-extrabold uppercase leading-none tracking-[0.2em] text-text-dim">
+        <span className="relative inline-flex h-[0.45em] w-[0.45em]" aria-hidden>
+          {/* Re-keyed on every join: the ring restarts (transform/opacity). */}
+          <span key={joined} className="presence-ping absolute -inset-[0.45em] rounded-full border-2 border-power-green" />
+          <span className="h-full w-full rounded-full bg-power-green" style={{ boxShadow: "0 0 10px var(--color-power-green)" }} />
+        </span>
+        en la sala
+      </span>
+    </div>
+  );
+}
+
+function Finalists({
+  cards,
+  reduced,
+}: {
+  cards: Array<Pick<Team, "id" | "name" | "color">>;
+  reduced: boolean;
+}) {
+  const dense = cards.length >= 5;
+  return (
+    <ul
+      className={[
+        "flex flex-col",
+        dense ? "gap-[clamp(0.35rem,0.9vh,0.7rem)]" : "gap-[clamp(0.55rem,1.4vh,1.1rem)]",
+      ].join(" ")}
+      data-mascot-keepout="finalists"
+    >
+      {cards.map((team, i) => (
+        <motion.li
+          key={team.id}
+          initial={reduced ? { opacity: 0 } : { opacity: 0, x: 28 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: reduced ? 0 : 0.2 + i * 0.08, duration: durations.base, ease: easings.standard }}
+          className={[
+            "glass glass--flat flex items-center gap-[clamp(0.8rem,1.4vw,1.4rem)] px-[clamp(0.9rem,1.5vw,1.6rem)]",
+            dense ? "py-[clamp(0.4rem,1vh,0.8rem)]" : "py-[clamp(0.7rem,1.6vh,1.2rem)]",
+          ].join(" ")}
+          style={{ borderRadius: "1.1rem" }}
+        >
+          <span aria-hidden className="h-[70%] w-1.5 shrink-0 self-center rounded-full" style={{ backgroundColor: team.color }} />
+          <TeamColorChip color={team.color} label={teamInitial(team.name)} size={dense ? 44 : 52} style={chipRem(dense ? 2.75 : 3.25)} />
+          <span
+            className={[
+              "min-w-0 flex-1 truncate font-display font-extrabold leading-tight text-text",
+              dense ? "text-[clamp(1.4rem,2vw,2.6rem)]" : "text-proj-h2",
+            ].join(" ")}
+          >
+            {team.name}
+          </span>
+        </motion.li>
+      ))}
+    </ul>
+  );
+}
+
+function AnonymousFinalists({ count, reduced }: { count: number; reduced: boolean }) {
+  return (
+    <motion.div
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: durations.slow, ease: easings.decel, delay: reduced ? 0 : 0.2 }}
+      className="glass glass--flat flex flex-col gap-[clamp(0.9rem,2vh,1.5rem)] px-[clamp(1.2rem,2vw,2.2rem)] py-[clamp(1rem,2.4vh,1.8rem)]"
+      style={{ borderRadius: "1.4rem" }}
+      data-mascot-keepout="finalists"
+    >
+      <div className="flex items-center gap-[0.9rem]">
+        <LockIcon />
+        <span className="flex flex-col gap-[0.35rem]">
+          <span className="font-display text-proj-h2 font-black leading-none text-text">
+            {count} finalistas
+          </span>
+          <span className="font-display text-proj-label font-extrabold uppercase leading-none tracking-[0.16em] text-text-dim">
+            Nombres ocultos hasta el final
+          </span>
+        </span>
+      </div>
+      <div className="flex flex-wrap items-end gap-[clamp(0.8rem,1.6vw,1.6rem)]" aria-hidden>
+        {Array.from({ length: count }, (_, i) => (
+          <Silhouette key={i} />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function Silhouette() {
+  return (
+    <svg viewBox="0 0 48 56" className="h-[clamp(3rem,6vh,4.6rem)] w-auto" fill="#5b6075">
+      <circle cx="24" cy="15" r="11" />
+      <path d="M4 56c0-12 9-21 20-21s20 9 20 21z" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-[clamp(1.6rem,2.2vw,2.6rem)] w-auto shrink-0 text-ey-yellow"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="4" y="11" width="16" height="10" rx="2.5" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
 
 export default LobbyStage;
