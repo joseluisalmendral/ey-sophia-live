@@ -46,6 +46,11 @@ export interface PollFormInput {
   anonymousDisplay: boolean;
   tieRule: TieRule;
   teams: TeamInput[];
+  /**
+   * Initial Broqui on/off, written ONLY by createPoll. After creation the Live
+   * Control switch (setAssistantEnabled) is the single writer, so saving the
+   * config form mid-show can never overwrite the live toggle.
+   */
   assistantEnabled: boolean;
   assistantMinSeconds: number;
   assistantMaxSeconds: number;
@@ -159,7 +164,8 @@ export async function updatePoll(input: PollFormInput): Promise<ActionResult> {
       show_names: input.showNames,
       anonymous_display: input.anonymousDisplay,
       tie_rule: input.tieRule,
-      assistant_enabled: input.assistantEnabled,
+      // assistant_enabled is intentionally NOT written here: Live Control owns
+      // it after creation (see PollFormInput.assistantEnabled).
       assistant_min_interval_s: input.assistantMinSeconds,
       assistant_max_interval_s: input.assistantMaxSeconds,
     })
@@ -324,18 +330,29 @@ export async function changeStatus(
  * is_admin()) is the real wall; `guard()` gives a fast, clear failure here.
  * The projector picks it up within ~5s via /api/poll/[id]/assistant polling.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ASSISTANT_TOGGLE_ERROR = "No se pudo cambiar a Broqui. Inténtalo de nuevo.";
+
 export async function setAssistantEnabled(
-  pollId: string,
-  enabled: boolean,
+  pollId: unknown,
+  enabled: unknown,
 ): Promise<ActionResult> {
   const g = await guard();
   if (g) return { ok: false, error: g };
+  // Server actions are public endpoints: validate the wire values, never trust
+  // the TypeScript signature.
+  if (typeof enabled !== "boolean" || typeof pollId !== "string" || !UUID_RE.test(pollId)) {
+    return { ok: false, error: ASSISTANT_TOGGLE_ERROR };
+  }
   const supabase = await createClient();
   const { error } = await supabase
     .from("polls")
     .update({ assistant_enabled: enabled })
     .eq("id", pollId);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    console.error("[setAssistantEnabled] update failed", error.message);
+    return { ok: false, error: ASSISTANT_TOGGLE_ERROR };
+  }
   revalidatePath(`/admin/${pollId}`);
   return { ok: true };
 }

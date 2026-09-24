@@ -439,20 +439,28 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
         </span>
       </label>
 
-      {/* Broqui (mascot) settings: live on/off + ambient pacing window. */}
+      {/* Broqui (mascot) settings. The on/off switch is only set here at
+          creation; afterwards Live Control is its single writer (saving this
+          form never touches it), so the edit form just points there. */}
       <fieldset className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <legend className="px-1 font-display text-h3 font-bold text-text">
           Asistente en pantalla (Broqui)
         </legend>
-        <label className="mt-2 flex items-center gap-2.5 text-small text-text">
-          <input
-            type="checkbox"
-            checked={assistantEnabled}
-            onChange={(e) => setAssistantEnabled(e.target.checked)}
-            className="h-4 w-4 accent-[var(--color-ey-yellow)]"
-          />
-          Mostrar a Broqui en el proyector
-        </label>
+        {isEdit ? (
+          <p className="mt-2 text-small text-text-dim">
+            Encender o apagar a Broqui se controla en directo desde la pestaña «Control en vivo».
+          </p>
+        ) : (
+          <label className="mt-2 flex items-center gap-2.5 text-small text-text">
+            <input
+              type="checkbox"
+              checked={assistantEnabled}
+              onChange={(e) => setAssistantEnabled(e.target.checked)}
+              className="h-4 w-4 accent-[var(--color-ey-yellow)]"
+            />
+            Mostrar a Broqui en el proyector
+          </label>
+        )}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className={labelCls}>Intervalo mínimo entre frases (s)</span>
