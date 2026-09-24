@@ -28,7 +28,7 @@ Out of scope: AI-generated imagery; pptx image extraction (deck not available lo
 - [x] T2 Create event poll + 3 provisional teams in prod DB (route: delegated, DB-only, parallel with T1) — HACK27, id e1085b68-8b89-4b03-957d-f585289c1759, config mirrors H55CX, 3 tallies, draft pristine
 - [x] T3 Generate optimized QR PNG for deck slide (route: delegated) — ~/Downloads/QR_votacion_IA_Hackathon.png, 2048px, level H, 3.3KB, decoded OK
 - [x] T4 Repoint /tv/directo to the event poll (route: delegated) — /api/channel/directo returns new pollId (verified by parent)
-- [ ] T5 Deploy (preview → prod) and verify routes + visuals (route: inline + browser check)
+- [x] T5 Deploy and verify (route: inline) — main 455033f live in ~80s; prod /, /vote/HACK27, /screen/HACK27, /tv/directo, /admin/login, /screen/H55CX = 200, /vote/NOPE = 404; branding present, no visible SophIA
 
 ## Acceptance criteria
 - No visible "SophIA" string on /, /vote/<code>, /screen/<code>, /tv/directo, curtain, tab title.
