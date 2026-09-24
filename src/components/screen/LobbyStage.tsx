@@ -8,7 +8,6 @@ import { CountUp } from "@/components/atoms/CountUp";
 import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { EyBeam } from "@/components/brand/EyBeam";
 import { durations, easings } from "@/lib/motion/tokens";
-import { useLobbyJoins } from "./useLobbyJoins";
 import { teamInitial } from "./anonymize";
 import type { Poll, RankedTeam, Team } from "@/lib/types";
 
@@ -39,6 +38,11 @@ export interface LobbyStageProps {
   /** Server open timestamp (a FUTURE time during countdown) driving the count-in. */
   opensAt: string | null;
   reduced: boolean;
+  /**
+   * Distinct joins this run (null until the first successful read). Fed by the
+   * container (useLobbyJoins in ScreenClient) or by the /lab engine.
+   */
+  joined: number | null;
 }
 
 /** Extract a friendly "dominio/" hint from the absolute voter URL (host only). */
@@ -58,8 +62,8 @@ export const LobbyStage = memo(function LobbyStage({
   isCountdown,
   opensAt,
   reduced,
+  joined,
 }: LobbyStageProps) {
-  const { count: joined } = useLobbyJoins(poll.id);
   // Premium pop: the counter scales up briefly every time the number grows.
   // NumberFlow keeps its digit roll; this adds the "someone just joined" beat.
   const [counterScope, animateCounter] = useAnimate();

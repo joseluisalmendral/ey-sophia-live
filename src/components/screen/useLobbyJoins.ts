@@ -47,10 +47,20 @@ interface LobbyResponse {
   latest?: Array<{ alias?: string }>;
 }
 
-export function useLobbyJoins(pollId: string): LobbyJoins {
-  const [state, setState] = useState<LobbyJoins>({ count: null, members: [] });
+const EMPTY: LobbyJoins = { count: null, members: [] };
+
+/**
+ * @param enabled — poll only while the lobby is on screen. The container
+ * (ScreenClient) owns this hook so the presentational stages stay data-free;
+ * `enabled` mirrors the old "LobbyStage is mounted" lifetime: polling starts
+ * when the lobby shows and stops (state reset to the initial null count) when
+ * it leaves, so every lobby run starts clean exactly like a fresh mount did.
+ */
+export function useLobbyJoins(pollId: string, enabled = true): LobbyJoins {
+  const [state, setState] = useState<LobbyJoins>(EMPTY);
 
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -99,8 +109,10 @@ export function useLobbyJoins(pollId: string): LobbyJoins {
       active = false;
       if (timer !== null) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
+      // Same as the old unmount: the next lobby run starts from "no data yet".
+      setState(EMPTY);
     };
-  }, [pollId]);
+  }, [pollId, enabled]);
 
   return state;
 }
