@@ -8,7 +8,11 @@ import { TeamColorChip } from "@/components/atoms/TeamColorChip";
 import { StatusBadge } from "./StatusBadge";
 import { CopyButton } from "./CopyButton";
 import { voteUrl, screenUrl } from "./links";
-import { changeStatus, relaunchPoll } from "@/app/admin/(panel)/poll-actions";
+import {
+  changeStatus,
+  relaunchPoll,
+  setAssistantEnabled,
+} from "@/app/admin/(panel)/poll-actions";
 import type { PollStatus } from "@/lib/types";
 
 /**
@@ -53,6 +57,7 @@ export function LiveControlPanel({
   initialStatus,
   hasCountdown,
   teamCount,
+  assistantEnabled: initialAssistantEnabled,
   enabled = true,
 }: {
   pollId: string;
@@ -61,6 +66,8 @@ export function LiveControlPanel({
   hasCountdown: boolean;
   /** Number of saved teams with a non-empty name — a poll with <2 cannot open. */
   teamCount: number;
+  /** Current DB value for the Broqui on/off switch (server snapshot). */
+  assistantEnabled: boolean;
   /**
    * When false, the panel stays mounted but does NOT open a realtime
    * subscription. PollWorkspace keeps the inactive tab mounted (to preserve
@@ -74,6 +81,25 @@ export function LiveControlPanel({
   const [error, setError] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmRelaunch, setConfirmRelaunch] = useState(false);
+
+  // Optimistic Broqui switch: flip immediately, revert on a failed write.
+  // Own transition/pending state — independent of the status-machine `pending`
+  // above, so toggling Broqui never disables the Draft/Countdown/Open/Close
+  // buttons.
+  const [assistantOn, setAssistantOn] = useState(initialAssistantEnabled);
+  const [assistantPending, startAssistantTransition] = useTransition();
+
+  function toggleAssistant() {
+    const next = !assistantOn;
+    setAssistantOn(next);
+    startAssistantTransition(async () => {
+      const res = await setAssistantEnabled(pollId, next);
+      if (!res.ok) {
+        setAssistantOn(!next); // revert on failure
+        setError(res.error ?? "Error");
+      }
+    });
+  }
 
   // Live mirror of what the room sees (subscribes to poll:<id> when enabled).
   const { teams, status: liveStatus, connectionState } = useLiveTally(pollId, {
@@ -298,6 +324,25 @@ export function LiveControlPanel({
             {connectionState}
           </span>
         </span>
+      </div>
+
+      {/* Broqui on/off — optimistic, admin-gated, projector picks it up in ~5s. */}
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-surface-raised px-5 py-4">
+        <div>
+          <label className="flex items-center gap-2.5 text-small font-medium text-text">
+            <input
+              type="checkbox"
+              checked={assistantOn}
+              disabled={assistantPending}
+              onChange={toggleAssistant}
+              className="h-4 w-4 accent-[var(--color-ey-yellow)] disabled:opacity-60"
+            />
+            Broqui en pantalla · {assistantOn ? "Activado" : "Desactivado"}
+          </label>
+          <p className="mt-1 text-micro text-text-dim">
+            El proyector lo recoge en ~5 s. Atajo en el proyector: tecla M.
+          </p>
+        </div>
       </div>
 
       {/* Live tally mirror */}

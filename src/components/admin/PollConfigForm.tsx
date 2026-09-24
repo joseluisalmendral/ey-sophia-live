@@ -10,6 +10,7 @@ import {
   updatePoll,
   type PollFormInput,
 } from "@/app/admin/(panel)/poll-actions";
+import { validateInterval } from "@/lib/assistant/scheduler";
 import type { ChartType, TieRule } from "@/lib/types";
 
 /**
@@ -50,6 +51,9 @@ export interface PollConfigInitial {
   teams: TeamDraft[];
   /** Locked when the poll is no longer a draft (teams/code shouldn't change mid-event). */
   locked?: boolean;
+  assistantEnabled: boolean;
+  assistantMinSeconds: number;
+  assistantMaxSeconds: number;
 }
 
 const DEFAULT_COLORS = [
@@ -92,6 +96,24 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
     initial.anonymousDisplay,
   );
   const [tieRule, setTieRule] = useState<TieRule>(initial.tieRule);
+  const [assistantEnabled, setAssistantEnabled] = useState(
+    initial.assistantEnabled,
+  );
+  const [assistantMin, setAssistantMin] = useState<string>(
+    String(initial.assistantMinSeconds),
+  );
+  const [assistantMax, setAssistantMax] = useState<string>(
+    String(initial.assistantMaxSeconds),
+  );
+  // Live client-side validation (same rules as the server: validateInterval).
+  // Only surfaced once both fields parse as numbers, so an empty/mid-typing
+  // field doesn't flash an error.
+  const assistantMinNum = Number(assistantMin);
+  const assistantMaxNum = Number(assistantMax);
+  const assistantIntervalError =
+    assistantMin.trim() && assistantMax.trim()
+      ? validateInterval({ min: assistantMinNum, max: assistantMaxNum })
+      : null;
   const [teams, setTeams] = useState<TeamDraft[]>(
     initial.teams.length > 0
       ? initial.teams
@@ -106,7 +128,11 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
   // it can be saved/created — otherwise the voter/projector would render broken.
   const namedTeams = teams.filter((t) => t.name.trim().length > 0);
   const teamsValid = namedTeams.length >= 2;
-  const canSave = Boolean(title.trim()) && teamsValid && !pending;
+  const canSave =
+    Boolean(title.trim()) &&
+    teamsValid &&
+    !assistantIntervalError &&
+    !pending;
 
   function updateTeam(i: number, patch: Partial<TeamDraft>) {
     setTeams((prev) => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
@@ -161,6 +187,14 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
       setError("Añade al menos 2 equipos con nombre.");
       return;
     }
+    const intervalError = validateInterval({
+      min: assistantMinNum,
+      max: assistantMaxNum,
+    });
+    if (intervalError) {
+      setError(intervalError);
+      return;
+    }
     const payload: PollFormInput = {
       id: initial.id,
       title,
@@ -173,6 +207,9 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
       anonymousDisplay,
       tieRule,
       teams: teams.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+      assistantEnabled,
+      assistantMinSeconds: assistantMinNum,
+      assistantMaxSeconds: assistantMaxNum,
     };
     startTransition(async () => {
       const res = isEdit ? await updatePoll(payload) : await createPoll(payload);
@@ -401,6 +438,55 @@ export function PollConfigForm({ initial }: { initial: PollConfigInitial }) {
           </span>
         </span>
       </label>
+
+      {/* Broqui (mascot) settings: live on/off + ambient pacing window. */}
+      <fieldset className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <legend className="px-1 font-display text-h3 font-bold text-text">
+          Asistente en pantalla (Broqui)
+        </legend>
+        <label className="mt-2 flex items-center gap-2.5 text-small text-text">
+          <input
+            type="checkbox"
+            checked={assistantEnabled}
+            onChange={(e) => setAssistantEnabled(e.target.checked)}
+            className="h-4 w-4 accent-[var(--color-ey-yellow)]"
+          />
+          Mostrar a Broqui en el proyector
+        </label>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>Intervalo mínimo entre frases (s)</span>
+            <input
+              type="number"
+              min={6}
+              max={120}
+              value={assistantMin}
+              onChange={(e) => setAssistantMin(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>Intervalo máximo (s)</span>
+            <input
+              type="number"
+              min={8}
+              max={120}
+              value={assistantMax}
+              onChange={(e) => setAssistantMax(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+        </div>
+        <p className="mt-3 text-micro text-text-dim">
+          Las reacciones a eventos (cambio de líder, empate…) no esperan al
+          intervalo.
+        </p>
+        {assistantIntervalError && (
+          <p role="alert" className="mt-2 text-small text-[#FF9E9E]">
+            {assistantIntervalError}
+          </p>
+        )}
+      </fieldset>
 
       {error && (
         <p role="alert" className="text-small text-[#FF9E9E]">

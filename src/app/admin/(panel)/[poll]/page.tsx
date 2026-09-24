@@ -46,6 +46,9 @@ export default async function PollWorkspacePage({
     teams: teams.map((t) => ({ id: t.id, name: t.name, color: t.color })),
     // Teams + code are locked once a poll leaves draft (avoid altering a live event).
     locked: poll.status !== "draft",
+    assistantEnabled: poll.assistantEnabled,
+    assistantMinSeconds: poll.assistantMinSeconds,
+    assistantMaxSeconds: poll.assistantMaxSeconds,
   };
 
   return (
@@ -56,6 +59,7 @@ export default async function PollWorkspacePage({
       joinCode={poll.joinCode}
       hasCountdown={poll.countdownSeconds != null && poll.countdownSeconds > 0}
       configInitial={configInitial}
+      assistantEnabled={poll.assistantEnabled}
       runs={runs}
       channel={
         channel ? { slug: channel.slug, pollId: channel.pollId } : null

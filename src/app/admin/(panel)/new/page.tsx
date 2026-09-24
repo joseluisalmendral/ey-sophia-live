@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PollConfigForm, type PollConfigInitial } from "@/components/admin/PollConfigForm";
 import { generateJoinCode } from "@/components/admin/joinCode";
+import { INTERVAL_DEFAULTS } from "@/lib/assistant/scheduler";
 
 /**
  * New poll — /admin/new
@@ -27,6 +28,9 @@ export default function NewPollPage() {
       { name: "", color: "#FFE600" },
       { name: "", color: "#96d3b4" },
     ],
+    assistantEnabled: true,
+    assistantMinSeconds: INTERVAL_DEFAULTS.min,
+    assistantMaxSeconds: INTERVAL_DEFAULTS.max,
   };
 
   return (

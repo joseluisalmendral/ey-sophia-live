@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/supabase/auth";
 import type { ChartType, PollStatus, TieRule } from "@/lib/types";
 import { generateJoinCode, isValidJoinCode } from "@/components/admin/joinCode";
+import { validateInterval } from "@/lib/assistant/scheduler";
 
 /**
  * Admin mutations for polls, teams, status transitions, and the admins
@@ -45,6 +46,9 @@ export interface PollFormInput {
   anonymousDisplay: boolean;
   tieRule: TieRule;
   teams: TeamInput[];
+  assistantEnabled: boolean;
+  assistantMinSeconds: number;
+  assistantMaxSeconds: number;
 }
 
 /** Ensure the join code is unique (ignoring the poll being edited). */
@@ -74,6 +78,11 @@ export async function createPoll(input: PollFormInput): Promise<ActionResult> {
   const g = await guard();
   if (g) return { ok: false, error: g };
   if (!input.title.trim()) return { ok: false, error: "title_required" };
+  const intervalError = validateInterval({
+    min: input.assistantMinSeconds,
+    max: input.assistantMaxSeconds,
+  });
+  if (intervalError) return { ok: false, error: intervalError };
 
   const supabase = await createClient();
   const code = isValidJoinCode(input.joinCode)
@@ -93,6 +102,9 @@ export async function createPoll(input: PollFormInput): Promise<ActionResult> {
       show_names: input.showNames,
       anonymous_display: input.anonymousDisplay,
       tie_rule: input.tieRule,
+      assistant_enabled: input.assistantEnabled,
+      assistant_min_interval_s: input.assistantMinSeconds,
+      assistant_max_interval_s: input.assistantMaxSeconds,
       status: "draft",
     })
     .select("id")
@@ -123,6 +135,11 @@ export async function updatePoll(input: PollFormInput): Promise<ActionResult> {
   if (g) return { ok: false, error: g };
   if (!input.id) return { ok: false, error: "missing_poll_id" };
   if (!input.title.trim()) return { ok: false, error: "title_required" };
+  const intervalError = validateInterval({
+    min: input.assistantMinSeconds,
+    max: input.assistantMaxSeconds,
+  });
+  if (intervalError) return { ok: false, error: intervalError };
 
   const supabase = await createClient();
   const code = isValidJoinCode(input.joinCode)
@@ -142,6 +159,9 @@ export async function updatePoll(input: PollFormInput): Promise<ActionResult> {
       show_names: input.showNames,
       anonymous_display: input.anonymousDisplay,
       tie_rule: input.tieRule,
+      assistant_enabled: input.assistantEnabled,
+      assistant_min_interval_s: input.assistantMinSeconds,
+      assistant_max_interval_s: input.assistantMaxSeconds,
     })
     .eq("id", input.id);
 
@@ -293,6 +313,29 @@ export async function changeStatus(
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidatePath(`/admin/${pollId}`);
+  return { ok: true };
+}
+
+/**
+ * Live Control's Broqui on/off switch — writes ONLY assistant_enabled (never
+ * touches min/max pacing) so it stays a single, fast, optimistic toggle
+ * distinct from the full config form save. RLS ("polls admin update",
+ * is_admin()) is the real wall; `guard()` gives a fast, clear failure here.
+ * The projector picks it up within ~5s via /api/poll/[id]/assistant polling.
+ */
+export async function setAssistantEnabled(
+  pollId: string,
+  enabled: boolean,
+): Promise<ActionResult> {
+  const g = await guard();
+  if (g) return { ok: false, error: g };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("polls")
+    .update({ assistant_enabled: enabled })
+    .eq("id", pollId);
+  if (error) return { ok: false, error: error.message };
   revalidatePath(`/admin/${pollId}`);
   return { ok: true };
 }

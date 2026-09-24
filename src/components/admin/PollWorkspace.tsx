@@ -23,6 +23,7 @@ export function PollWorkspace({
   joinCode,
   hasCountdown,
   configInitial,
+  assistantEnabled,
   runs,
   initialTab,
   channel = null,
@@ -33,6 +34,8 @@ export function PollWorkspace({
   joinCode: string;
   hasCountdown: boolean;
   configInitial: PollConfigInitial;
+  /** Current DB value for the Live Control Broqui switch (server snapshot). */
+  assistantEnabled: boolean;
   /** Archived launches (poll_runs), newest first — the "Historial" tab. */
   runs: PollRun[];
   initialTab: "config" | "live" | "history";
@@ -126,6 +129,7 @@ export function PollWorkspace({
           teamCount={
             configInitial.teams.filter((t) => t.name.trim().length > 0).length
           }
+          assistantEnabled={assistantEnabled}
           enabled={tab === "live"}
         />
       </div>
