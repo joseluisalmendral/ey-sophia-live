@@ -1,3 +1,4 @@
+import type { MascotCommand, MascotReport } from "@/components/mascot/MascotHost";
 import type { LabSnapshot } from "./engine";
 import type { PersonaId } from "./personas";
 import type { Phase } from "@/app/vote/[poll]/phase";
@@ -23,7 +24,11 @@ export type LabMessage =
   /** Control room → phone frame: drop the manual override. */
   | { type: "persona-reset"; id: PersonaId }
   /** Projector frame → control room: mascot keep-out zones found on screen. */
-  | { type: "keepouts"; count: number };
+  | { type: "keepouts"; count: number }
+  /** Control room → projector frame: drive the mascot (force / fire / random). */
+  | { type: "mascot-cmd"; cmd: MascotCommand }
+  /** Projector frame → control room: line log + live state (overlap detector). */
+  | { type: "mascot"; report: MascotReport };
 
 export interface LabChannel {
   post(msg: LabMessage): void;

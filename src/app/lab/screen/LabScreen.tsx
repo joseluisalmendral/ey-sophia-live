@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { MascotHost, type MascotCommand, type MascotLabBridge } from "@/components/mascot/MascotHost";
 import { ScreenStage } from "@/components/screen/ScreenStage";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import { siteUrl } from "@/lib/utils/siteUrl";
@@ -15,10 +16,17 @@ import { useLabDriver, useLabFollower, useStructural } from "@/lab/useLab";
  * snapshot arrives on the client), so there is no hydration surface.
  */
 
-/** Debug outline for mascot anchors/keep-outs (E3 adds the attributes). */
+/**
+ * Debug outlines: keep-outs (pink), anchors (blue), mascot body + bubble
+ * (green; RED the moment either intersects a keep-out — the acceptance gate).
+ */
 const KEEPOUT_CSS = `
 [data-mascot-keepout]{outline:3px dashed #ff4d6d !important;outline-offset:-3px;background-image:repeating-linear-gradient(45deg,rgba(255,77,109,.10) 0 12px,transparent 12px 24px)}
 [data-mascot-anchor]{outline:3px dashed #38bdf8 !important;outline-offset:-3px}
+[data-mascot-host] [data-broqui]{outline:3px solid #22c55e;outline-offset:-3px}
+[data-mascot-host] .bubble{outline:3px solid #22c55e;outline-offset:2px}
+[data-mascot-host][data-mascot-overlap="true"] [data-broqui],
+[data-mascot-host][data-mascot-overlap="true"] .bubble{outline-color:#ef4444}
 `;
 
 export function LabScreen({
@@ -28,8 +36,16 @@ export function LabScreen({
   drive: LabSettings | null;
   autoplay: boolean;
 }) {
-  const driver = useLabDriver(drive, { autoplay });
-  const follower = useLabFollower(drive === null);
+  // Mascot command bus: control-room messages → the host mounted below.
+  const listeners = useRef(new Set<(cmd: MascotCommand) => void>());
+  const onMessage = useMemo(
+    () => (msg: LabMessage) => {
+      if (msg.type === "mascot-cmd") listeners.current.forEach((cb) => cb(msg.cmd));
+    },
+    [],
+  );
+  const driver = useLabDriver(drive, { autoplay, onMessage });
+  const follower = useLabFollower(drive === null, onMessage);
   const snap = drive ? driver.snap : follower.snap;
   const post = useMemo(
     () =>
@@ -38,17 +54,29 @@ export function LabScreen({
         : (msg: LabMessage) => follower.channel?.post(msg),
     [drive, driver.controls.post, follower.channel],
   );
+  const bridge = useMemo<MascotLabBridge>(
+    () => ({
+      subscribe: (cb) => {
+        listeners.current.add(cb);
+        return () => listeners.current.delete(cb);
+      },
+      report: (report) => post({ type: "mascot", report }),
+    }),
+    [post],
+  );
 
   if (!snap) return <LabWaiting />;
-  return <LabScreenStage snap={snap} post={post} />;
+  return <LabScreenStage snap={snap} post={post} bridge={bridge} />;
 }
 
 function LabScreenStage({
   snap,
   post,
+  bridge,
 }: {
   snap: LabSnapshot;
   post: (msg: LabMessage) => void;
+  bridge: MascotLabBridge;
 }) {
   const osReduced = useReducedMotionPref();
   const { settings } = snap;
@@ -64,8 +92,8 @@ function LabScreenStage({
   // Client-only (the stage never renders before the first snapshot).
   const voterUrl = `${siteUrl()}/vote/${poll.joinCode}`;
 
-  // Keep-out overlap check placeholder: report how many zones exist (E3 adds
-  // the data-mascot-keepout attributes and the real overlap test).
+  // Keep-out zone count for the drawer hint (the overlap test itself runs in
+  // the mascot host and arrives as `mascot` state reports).
   const { showKeepouts } = frame;
   useEffect(() => {
     if (!showKeepouts) return;
@@ -96,6 +124,18 @@ function LabScreenStage({
         connectionState="live"
         ready
         reduced={reduced}
+        mascotSlot={
+          <MascotHost
+            config={{
+              enabled: settings.assistant.enabled,
+              min: settings.assistant.minIntervalS,
+              max: settings.assistant.maxIntervalS,
+            }}
+            reduced={reduced}
+            rngSeed={settings.seed}
+            lab={bridge}
+          />
+        }
       />
     </LabSettingsProvider>
   );

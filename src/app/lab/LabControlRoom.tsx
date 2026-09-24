@@ -1,7 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Broqui } from "@/components/mascot/Broqui";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Broqui,
+  EXPRESSIONS,
+  EXPRESSION_LABELS,
+  type BroquiActionType,
+  type Expression,
+} from "@/components/mascot/Broqui";
+import type {
+  MascotCommand,
+  MascotLogEntry,
+  MascotStateReport,
+} from "@/components/mascot/MascotHost";
+import type { AssistantEventType } from "@/lib/assistant/detectEvents";
+import { runSelfCheck, type SelfCheckReport } from "@/lib/assistant/selfCheck";
 import type { Phase } from "@/app/vote/[poll]/phase";
 import { useReducedMotionPref } from "@/lib/motion/useReducedMotionPref";
 import type { ChartType, PollStatus, TieRule } from "@/lib/types";
@@ -48,8 +61,40 @@ const TIE_RULES: { value: TieRule; label: string }[] = [
   { value: "double_crown", label: "Doble corona" },
 ];
 
+const MASCOT_ACTIONS: { type: BroquiActionType; label: string }[] = [
+  { type: "surprise", label: "Sorpresa" },
+  { type: "laugh", label: "Risa" },
+  { type: "celebrate", label: "Celebrar" },
+  { type: "squeeze", label: "Apretar ojos" },
+  { type: "peek", label: "Asomarse" },
+  { type: "enter", label: "Entrar" },
+  { type: "exit", label: "Salir" },
+];
+
+const MASCOT_EVENTS: AssistantEventType[] = [
+  "first_vote",
+  "lead_change",
+  "tie_top",
+  "milestone",
+  "surge",
+  "landslide",
+  "quiet",
+  "last10",
+  "count_in",
+  "lobby_joins",
+  "close",
+  "reveal_winner",
+];
+
+/** Gallery excludes the overlays that are not sustained poses. */
+const GALLERY: Expression[] = EXPRESSIONS.filter((e) => e !== "blink" && e !== "lookAt");
+
+const LOG_LIMIT = 200;
+
 const btn =
   "rounded-full border px-3 py-1.5 text-small font-medium transition-colors duration-150 disabled:opacity-40";
+const btnMini =
+  "rounded-md border border-glass-border bg-glass-fill px-2 py-0.5 text-micro font-medium text-text-dim transition-colors duration-150 hover:text-text";
 const btnOff = `${btn} border-glass-border bg-glass-fill text-text-dim hover:text-text`;
 const btnOn = `${btn} border-ey-yellow/70 bg-ey-yellow/15 text-ey-yellow`;
 
@@ -73,11 +118,28 @@ export function LabControlRoom({
 }) {
   const [personaInfo, setPersonaInfo] = useState<Partial<Record<PersonaId, PersonaInfo>>>({});
   const [keepouts, setKeepouts] = useState<number | null>(null);
+  const [mascotLog, setMascotLog] = useState<MascotLogEntry[]>([]);
+  const [mascotState, setMascotState] = useState<MascotStateReport | null>(null);
+  // Acceptance gate: how many state reports flagged an overlap since reset.
+  const [overlapCount, setOverlapCount] = useState(0);
+  const [lastOverlap, setLastOverlap] = useState("");
   const onMessage = useCallback((msg: LabMessage) => {
     if (msg.type === "persona") {
       setPersonaInfo((prev) => ({ ...prev, [msg.id]: { phase: msg.phase, manual: msg.manual } }));
     } else if (msg.type === "keepouts") {
       setKeepouts(msg.count);
+    } else if (msg.type === "mascot") {
+      if (msg.report.type === "line") {
+        const entry = msg.report.entry;
+        setMascotLog((prev) => [...prev.slice(-(LOG_LIMIT - 1)), entry]);
+      } else {
+        const state = msg.report.state;
+        setMascotState(state);
+        if (state.overlap) {
+          setOverlapCount((n) => n + 1);
+          setLastOverlap(`${state.stage}/${state.anchor ?? "-"}/${state.mode}/${state.bubble ? "bubble" : "quiet"}`);
+        }
+      }
     }
   }, []);
   const { snap, controls } = useLabDriver(initial, { autoplay, onMessage });
@@ -119,9 +181,215 @@ export function LabControlRoom({
       </div>
 
       {snap && (
-        <Drawer settings={snap.settings} controls={controls} keepouts={keepouts} />
+        <>
+          <Drawer settings={snap.settings} controls={controls} keepouts={keepouts} />
+          <MascotPanel
+            controls={controls}
+            log={mascotLog}
+            state={mascotState}
+            overlapCount={overlapCount}
+            lastOverlap={lastOverlap}
+            onReset={() => {
+              setMascotLog([]);
+              setOverlapCount(0);
+              setLastOverlap("");
+            }}
+          />
+        </>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * MascotPanel — rehearsal desk for Broqui: force any expression, fire any
+ * event or a random line, live line log, self-check (pool, 90 chars, anonymous
+ * leak, intervals, cadence) and the keep-out overlap detector.
+ */
+function MascotPanel({
+  controls,
+  log,
+  state,
+  overlapCount,
+  lastOverlap,
+  onReset,
+}: {
+  controls: LabControls;
+  log: MascotLogEntry[];
+  state: MascotStateReport | null;
+  overlapCount: number;
+  lastOverlap: string;
+  onReset: () => void;
+}) {
+  const [forced, setForced] = useState<Expression | null>(null);
+  const [check, setCheck] = useState<SelfCheckReport | null>(null);
+  const send = useCallback((cmd: MascotCommand) => controls.post({ type: "mascot-cmd", cmd }), [controls]);
+  const runCheck = useCallback(() => setCheck(runSelfCheck()), []);
+  // Run once on mount (a few ms, pure).
+  useEffect(() => {
+    const id = setTimeout(runCheck, 0);
+    return () => clearTimeout(id);
+  }, [runCheck]);
+  const logRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
+  }, [log.length]);
+  const recent = useMemo(() => log.slice(-14), [log]);
+  const overlapNow = state?.overlap ?? false;
+  const gateOk = overlapCount === 0 && !overlapNow;
+
+  return (
+    <section
+      className="grid shrink-0 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-5 gap-y-2 border-t border-glass-border px-4 py-2.5 text-small"
+      aria-label="Mascota"
+      data-mascot-panel=""
+      data-mascot-overlap-count={overlapCount}
+      data-mascot-last-overlap={lastOverlap}
+      data-mascot-overlap-now={overlapNow ? "true" : "false"}
+      data-mascot-bubble={state?.bubble ? "true" : "false"}
+      data-mascot-visible={state?.visible ? "true" : "false"}
+      data-mascot-stage={state?.stage ?? ""}
+      data-mascot-anchor={state?.anchor ?? ""}
+      data-mascot-log-count={log.length}
+    >
+      {/* Column 1 — force / fire */}
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-1">
+          <FrameLabel>Expresión</FrameLabel>
+          <button
+            type="button"
+            className={forced === null ? `${btnMini} border-ey-yellow/70 text-ey-yellow` : btnMini}
+            onClick={() => {
+              setForced(null);
+              send({ type: "expression", expression: null });
+            }}
+          >
+            Auto
+          </button>
+          {GALLERY.map((e) => (
+            <button
+              key={e}
+              type="button"
+              aria-pressed={forced === e}
+              className={forced === e ? `${btnMini} border-ey-yellow/70 text-ey-yellow` : btnMini}
+              onClick={() => {
+                setForced(e);
+                send({ type: "expression", expression: e });
+              }}
+            >
+              {EXPRESSION_LABELS[e]}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <FrameLabel>Acción</FrameLabel>
+          {MASCOT_ACTIONS.map((a) => (
+            <button key={a.type} type="button" className={btnMini} onClick={() => send({ type: "action", action: a.type })}>
+              {a.label}
+            </button>
+          ))}
+          <button type="button" className={btnMini} onClick={() => send({ type: "move" })}>
+            Cambiar de sitio
+          </button>
+          <button type="button" className={btnMini} onClick={() => send({ type: "toggle" })}>
+            Tecla M
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <FrameLabel>Evento</FrameLabel>
+          {MASCOT_EVENTS.map((ev) => (
+            <button key={ev} type="button" className={btnMini} onClick={() => send({ type: "event", event: ev })} data-mascot-fire={ev}>
+              {ev}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`${btnMini} border-sophia-accent/60 text-sophia-accent`}
+            onClick={() => send({ type: "random" })}
+            data-mascot-random=""
+          >
+            Línea aleatoria
+          </button>
+        </div>
+      </div>
+
+      {/* Column 2 — live line log */}
+      <div className="flex min-h-0 min-w-0 flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <FrameLabel>Registro de líneas</FrameLabel>
+          <span className="text-micro text-text-dim">{log.length}</span>
+          <button type="button" className={`${btnMini} ml-auto`} onClick={onReset}>
+            Limpiar
+          </button>
+        </div>
+        <ol ref={logRef} className="max-h-28 min-h-[5rem] overflow-y-auto rounded-md border border-glass-border bg-black/20 px-2 py-1 font-mono text-micro leading-snug" data-mascot-log="">
+          {recent.length === 0 && <li className="text-text-dim">Sin líneas todavía.</li>}
+          {recent.map((e) => (
+            <li
+              key={`${e.id}-${e.at}`}
+              className="flex gap-2 whitespace-nowrap"
+              data-mascot-log-entry=""
+              data-at={e.at}
+              data-category={e.category}
+              data-line-id={e.id}
+              data-kind={e.kind}
+              data-anon={e.anonymized ? "true" : "false"}
+            >
+              <span className="text-text-dim">{new Date(e.at).toLocaleTimeString("es-ES", { hour12: false })}</span>
+              <span className={e.kind === "event" ? "text-ey-yellow" : e.kind === "forced" ? "text-sophia-accent" : "text-power-green"}>
+                {e.event ?? e.category}
+              </span>
+              <span className="text-text-dim">{e.id}</span>
+              <span className="truncate text-text">{e.text}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Column 3 — self-check + overlap detector */}
+      <div className="flex min-w-0 flex-col gap-1" data-mascot-selfcheck={check ? (check.ok ? "ok" : "fail") : "pending"}>
+        <div className="flex items-center gap-2">
+          <FrameLabel>Autocomprobación</FrameLabel>
+          <button type="button" className={`${btnMini} ml-auto`} onClick={runCheck}>
+            Repetir
+          </button>
+        </div>
+        <ul className="flex flex-col gap-0.5 text-micro leading-snug">
+          <li className="flex items-center gap-2" data-mascot-gate={gateOk ? "ok" : "fail"}>
+            <Dot ok={gateOk} />
+            <span className={gateOk ? "text-text" : "text-[#FF8A8A]"}>
+              Keep-outs: {gateOk ? "sin solapes" : `${overlapCount} solapes (${lastOverlap})`}
+              {state && (
+                <span className="text-text-dim">
+                  {" "}
+                  · {state.stage} · {state.anchor ?? "—"} · {state.bubble ? "bocadillo" : "silencio"} · {state.keepouts} zonas
+                </span>
+              )}
+            </span>
+          </li>
+          {check?.items.map((i) => (
+            <li key={i.id} className="flex items-center gap-2" data-mascot-check={i.id} data-ok={i.ok ? "true" : "false"}>
+              <Dot ok={i.ok} />
+              <span className={i.ok ? "text-text" : "text-[#FF8A8A]"}>
+                {i.label} <span className="text-text-dim">· {i.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function Dot({ ok }: { ok: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: ok ? "var(--color-power-green)" : "#ef4444", boxShadow: `0 0 8px ${ok ? "var(--color-power-green)" : "#ef4444"}` }}
+    />
   );
 }
 
@@ -140,7 +408,7 @@ function Toolbar({
   const [seedDraft, setSeedDraft] = useState<string | null>(null);
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-glass-border px-4 py-2">
-      {/* Static cameo — the real mascot host arrives with E3. */}
+      {/* Static cameo (the live co-host runs inside the projector frame). */}
       <div className="flex h-11 w-10 items-center justify-center" aria-hidden>
         <Broqui size={44} expression="smug" reduced={reduced} />
       </div>
