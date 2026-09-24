@@ -127,9 +127,13 @@ function PodiumBlock({
     : `linear-gradient(180deg, color-mix(in srgb, ${team.color} 45%, var(--color-cosmic-700)) 0%, color-mix(in srgb, ${team.color} 22%, var(--color-cosmic-700)) 100%)`;
 
   return (
-    <div className="flex w-[clamp(9rem,24vw,21rem)] flex-col items-center" data-mascot-keepout="podium">
-      {/* Crown above winners */}
-      <div className="flex h-[clamp(5.5rem,14vh,9.5rem)] items-end justify-center">
+    <div className="flex w-[clamp(9rem,24vw,21rem)] flex-col items-center">
+      {/* Crown, identity and plinth each carry their REAL rendered bounds as
+          mascot keep-outs (a long name overflows this column on purpose). */}
+      <div
+        className="flex h-[clamp(5.5rem,14vh,9.5rem)] items-end justify-center"
+        data-mascot-keepout="podium-crown"
+      >
         {isWinner && (
           <div className="flex flex-col items-center">
             <Crown size={reduced ? 92 : 128} delay={delay + 0.4} reduced={reduced} />
@@ -148,6 +152,7 @@ function PodiumBlock({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: delay + 0.5, duration: durations.base }}
         className="mb-2 flex flex-col items-center gap-1.5 text-center"
+        data-mascot-keepout="podium-name"
       >
         <TeamColorChip
           color={team.color}
@@ -172,6 +177,7 @@ function PodiumBlock({
         animate={{ opacity: 1, height: `${heightVh}vh` }}
         transition={reduced ? { duration: durations.base } : { ...springs.podiumRise, delay }}
         className="relative flex w-full items-start justify-center overflow-hidden rounded-t-xl"
+        data-mascot-keepout="podium-plinth"
         style={{
           background: plinthBg,
           boxShadow: isWinner ? "var(--shadow-glow-win)" : "var(--shadow-e2)",

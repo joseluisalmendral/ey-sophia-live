@@ -270,21 +270,21 @@ export function RevealStage({ teams, tieRule, reduced, ready, onBeatChange }: Re
                 <div
                   data-mascot-anchor="podium-right"
                   data-mascot-size="220"
-                  data-mascot-bubble="above,above-left"
+                  data-mascot-bubble="above,below,above-left"
                   data-mascot-bubble-max="0.4"
                   data-mascot-edge="right"
                   data-mascot-align="center"
-                  className="pointer-events-none absolute right-[1.5%] top-[26%] h-[44%] w-[17%]"
+                  className="pointer-events-none absolute right-[1.5%] top-[42%] h-[44%] w-[17%]"
                   aria-hidden
                 />
                 <div
                   data-mascot-anchor="podium-left"
                   data-mascot-size="220"
-                  data-mascot-bubble="above,above-right"
+                  data-mascot-bubble="above,below,above-right"
                   data-mascot-bubble-max="0.4"
                   data-mascot-edge="left"
                   data-mascot-align="center"
-                  className="pointer-events-none absolute left-[1.5%] top-[26%] h-[44%] w-[17%]"
+                  className="pointer-events-none absolute left-[1.5%] top-[42%] h-[44%] w-[17%]"
                   aria-hidden
                 />
               </>

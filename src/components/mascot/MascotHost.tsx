@@ -213,6 +213,33 @@ function lineExpression(e: ResolvedLine["expression"]): Expression {
   return e;
 }
 
+/**
+ * Real rendered bounds of a keep-out: its box UNION the bounds of every text
+ * node inside it (Range rects), so text that overflows its container — e.g.
+ * a long winner name wider than its plinth column — is protected too.
+ */
+function keepoutBounds(el: Element): DOMRect | null {
+  const box = el.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return null;
+  let x0 = box.left;
+  let y0 = box.top;
+  let x1 = box.right;
+  let y1 = box.bottom;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!n.textContent || !n.textContent.trim()) continue;
+    range.selectNodeContents(n);
+    const r = range.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    x0 = Math.min(x0, r.left);
+    y0 = Math.min(y0, r.top);
+    x1 = Math.max(x1, r.right);
+    y1 = Math.max(y1, r.bottom);
+  }
+  return new DOMRect(x0, y0, x1 - x0, y1 - y0);
+}
+
 function parseAnchor(el: Element, origin: Point): AnchorSpec | null {
   const r = el.getBoundingClientRect();
   if (r.width <= 0 || r.height <= 0) return null;
@@ -382,28 +409,35 @@ export function MascotHost(props: MascotHostProps) {
       const keepouts: Rect[] = [];
       frameEl.querySelectorAll("[data-mascot-keepout]").forEach((el) => {
         if (root.contains(el)) return;
-        const r = el.getBoundingClientRect();
-        if (r.width <= 0 || r.height <= 0) return;
+        const r = keepoutBounds(el);
+        if (!r) return;
         keepouts.push(rect(r.left - S.origin.x, r.top - S.origin.y, r.width, r.height));
       });
       S.keepouts = keepouts;
       return true;
     };
 
+    /** An anchor is usable at full size or, in a tight margin, a bit smaller. */
+    const fitAnchor = (a: AnchorSpec): AnchorSpec | null => {
+      for (const f of [1, 0.85, 0.72]) {
+        const spec = f === 1 ? a : { ...a, size: a.size * f };
+        if (bodyClear(poseForAnchor(spec, S.baseSize, S.k), S.baseSize, S.keepouts, S.frame)) return spec;
+      }
+      return null;
+    };
     const anchorsFor = (stage: MascotStage): AnchorSpec[] => {
       const ids = STAGE_ANCHORS[stage];
       const found = ids
         .map((id) => S.anchors.find((a) => a.id === id))
         .filter((a): a is AnchorSpec => !!a);
       if (stage === "reveal-suspense") return found; // the peek anchor sits on the edge
-      return found.filter((a) => bodyClear(poseForAnchor(a, S.baseSize, S.k), S.baseSize, S.keepouts, S.frame));
+      return found.map(fitAnchor).filter((a): a is AnchorSpec => !!a);
     };
 
     const keepoutAt = (name: string): Rect | null => {
       const el = frameEl.querySelector(`[data-mascot-keepout="${name}"]`);
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return r.width > 0 ? rect(r.left - S.origin.x, r.top - S.origin.y, r.width, r.height) : null;
+      const r = el ? keepoutBounds(el) : null;
+      return r ? rect(r.left - S.origin.x, r.top - S.origin.y, r.width, r.height) : null;
     };
     const rowRect = (rank: number): Rect | null => {
       const el = frameEl.querySelector(`[data-rank="${rank}"]`);
@@ -1039,7 +1073,7 @@ export function MascotHost(props: MascotHostProps) {
           let target: Rect | null = null;
           if (S.stage === "lobby" || S.stage === "countin") target = keepoutAt(S.stage === "countin" ? "countdown" : "qr");
           else if (S.stage === "live") target = rowRect(1) ?? keepoutAt("chart");
-          else if (S.stage === "podium") target = keepoutAt("podium");
+          else if (S.stage === "podium") target = keepoutAt("podium-crown") ?? keepoutAt("podium-name");
           if (target) look(center(target));
           S.glanceUntil = t + 1400;
           S.nextGlanceAt = t + uniform(rng, 7000, 12_000);

@@ -36,7 +36,10 @@ export const MOUTH = { x: 0.5, y: 0.55 } as const;
 /** Eye line inside the box (used to aim look-at). */
 export const EYES = { x: 0.5, y: 0.4 } as const;
 
-export const KEEPOUT_MARGIN = 6;
+/** Air the shield body keeps from every keep-out when standing on an anchor. */
+export const KEEPOUT_MARGIN = 14;
+/** A bubble is "clear" only with this much air around every keep-out. */
+export const BUBBLE_KEEPOUT_MARGIN = 10;
 export const BUBBLE_GAP = 14;
 export interface Inset {
   top: number;
@@ -221,7 +224,7 @@ export function placeBubble(
   const evaluate = (side: BubbleSide, r: Rect): BubblePlacement => {
     const inFrame = inside(r, frame);
     const overlap = keepouts.reduce((s, k) => s + overlapArea(r, k), 0) + overlapArea(r, body) * 4;
-    const clear = inFrame && overlap === 0;
+    const clear = inFrame && overlap === 0 && keepouts.every((k) => !intersects(r, k, BUBBLE_KEEPOUT_MARGIN));
     const tail = tailFor(side, r, mouth);
     const placement: BubblePlacement = { side, rect: r, tail, target: mouth, clear };
     const score = overlap + (inFrame ? 0 : 1e6);
